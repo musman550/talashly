@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Talashly - self-hosted search engine with RAG answers</title>
+<meta name="description" content="Talashly is an open-source, self-hosted search engine with its own crawler, index and cited AI answers. Python. No third-party APIs. Multilingual.">
+<style>
+:root{--bg:#fbfaf7;--fg:#1c1b18;--mut:#6b675e;--card:#fff;--line:#e5e1d6;--ac:#0f766e}
+@media(prefers-color-scheme:dark){:root{--bg:#14130f;--fg:#f1eee6;--mut:#a29d90;--card:#1d1b16;--line:#2e2b24;--ac:#2dd4bf}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
+.w{max-width:880px;margin:0 auto;padding:0 16px}
+header{padding:64px 0 32px}h1{font-size:clamp(2.4rem,8vw,3.6rem);margin:0 0 8px;letter-spacing:-.02em}
+.tag{color:var(--mut);font-size:1.15rem;max-width:620px}
+.btn{display:inline-block;margin:20px 12px 0 0;padding:10px 18px;border-radius:8px;background:var(--ac);color:#fff;text-decoration:none;font-weight:600}
+.btn.o{background:none;color:var(--ac);border:1px solid var(--ac)}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:32px 0}
+.c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.c h3{margin:0 0 6px;font-size:1.02rem}.c p{margin:0;color:var(--mut);font-size:.95rem}
+h2{margin:40px 0 10px}code,pre{background:var(--card);border:1px solid var(--line);border-radius:8px}
+code{padding:1px 6px}pre{padding:14px;overflow:auto}li{margin:4px 0}
+footer{padding:32px 0 56px;color:var(--mut);font-size:.9rem}a{color:var(--ac)}
+</style>
+</head>
+<body><div class="w">
+<header>
+<h1>Talashly</h1>
+<p class="tag">Your own search engine. Own crawler, own index, cited AI answers. Written in Python, no third-party search or AI APIs.</p>
+<a class="btn" href="https://github.com/musman550/talashly">View on GitHub</a><a class="btn o" href="#start">Quick start</a>
+</header>
+<div class="g">
+<div class="c"><h3>Own crawler</h3><p>Respects robots.txt and crawl-delay, uses sitemaps, ETag, dedupe and adaptive recrawl.</p></div>
+<div class="c"><h3>Own index</h3><p>SQLite FTS5 with BM25, freshness and domain diversity. Trigram index for Chinese, Japanese, Korean and Thai.</p></div>
+<div class="c"><h3>Cited answers (RAG)</h3><p>Answers built only from indexed pages, with sources. Optional local LLM with grounding check.</p></div>
+<div class="c"><h3>Code search</h3><p>Index your own folders and search functions, classes and identifiers.</p></div>
+<div class="c"><h3>Self-healing</h3><p>Crawler restarts, integrity checks, rotating backups and automatic restore.</p></div>
+<div class="c"><h3>Multi-user</h3><p>API keys, roles, rate limits and background tasks.</p></div>
+</div>
+<h2 id="start">Quick start</h2>
+<p><b>Windows:</b> run <code>INSTALL.bat</code> once, then <code>START.bat</code> and open <code>http://127.0.0.1:8000</code>.</p>
+<pre>git clone https://github.com/musman550/talashly
+cd talashly
+pip install -r requirements.txt
+python -m engine serve</pre>
+<h2>Good to know</h2>
+<ul>
+<li>This page is only a project site. The search engine runs on your own computer or server, not on GitHub Pages.</li>
+<li>It does not scrape Google, Bing or DuckDuckGo. You choose the sources in <code>seeds.toml</code>.</li>
+<li>JavaScript-rendered sites and vector search are not included yet.</li>
+</ul>
+<footer>Talashly is open source. See the repository for license and details.</footer>
+</div></body></html>

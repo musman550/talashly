@@ -1,0 +1,50 @@
+# Live sources: jab index mein jawab kamzor ho to brain inhe foran (sawal ke dauran) try karta hai.
+# Crawler robots.txt aur rate-limit phir bhi follow karta hai.
+#
+# kind = "direct": URL mein {title} (sawal ke alfaaz se, Wikipedia-style) ya {q}
+# kind = "search": us site ka apna search page; result ke links khud fetch hote hain. {q} URL-encoded.
+#   (Google/Bing/DuckDuckGo yahan mat daalein: unki terms scraping se mana karti hain.)
+# script = sawal ki script jis par ye source try ho: latin, urdu/arabic, devanagari, cyrillic, cjk, greek, hebrew, thai
+
+[[source]]
+name = "wikipedia-en"
+kind = "direct"
+script = "latin"
+url = "https://en.wikipedia.org/wiki/{title}"
+
+[[source]]
+name = "wikipedia-ur"
+kind = "direct"
+script = "urdu/arabic"
+url = "https://ur.wikipedia.org/wiki/{title}"
+
+[[source]]
+name = "wikipedia-ar"
+kind = "direct"
+script = "urdu/arabic"
+url = "https://ar.wikipedia.org/wiki/{title}"
+
+[[source]]
+name = "wikipedia-hi"
+kind = "direct"
+script = "devanagari"
+url = "https://hi.wikipedia.org/wiki/{title}"
+
+[[source]]
+name = "wikipedia-ru"
+kind = "direct"
+script = "cyrillic"
+url = "https://ru.wikipedia.org/wiki/{title}"
+
+[[source]]
+name = "wikipedia-zh"
+kind = "direct"
+script = "cjk"
+url = "https://zh.wikipedia.org/wiki/{title}"
+
+# Apni sites ka search (uncomment kar ke):
+# [[source]]
+# name = "my-docs"
+# kind = "search"
+# url = "https://docs.example.com/search?q={q}"
+# link_contains = "/docs/"

@@ -1,0 +1,68 @@
+# Seeds: crawler yahan se shuru karta hai. Apni pasand ki sites yahan daalein
+# (ya search box mein admin ke tor par:  /add https://site.com  ).
+# type = "feed"    -> RSS/Atom (taaza khabrein, har ~30 min)
+# type = "page"    -> normal page, links follow honge (sirf allowed domains ke andar)
+# type = "sitemap" -> sitemap.xml se saare URLs
+#
+# NOTE: ye URLs mere test sandbox se verify nahi ho sake (wahan internet nahi). Agar koi feed band/badal
+# gayi ho to crawler use skip kar ke aage barhta hai; "admin -> frontier" mein error nazar aa jata hai.
+
+[[seed]]
+url = "https://feeds.bbci.co.uk/news/world/rss.xml"
+type = "feed"
+topic = "news"
+
+[[seed]]
+url = "https://www.aljazeera.com/xml/rss/all.xml"
+type = "feed"
+topic = "news"
+
+[[seed]]
+url = "https://www.dawn.com/feeds/home"
+type = "feed"
+topic = "pakistan"
+
+[[seed]]
+url = "https://feeds.bbci.co.uk/urdu/rss.xml"
+type = "feed"
+topic = "urdu"
+
+[[seed]]
+url = "https://feeds.bbci.co.uk/hindi/rss.xml"
+type = "feed"
+topic = "hindi"
+
+[[seed]]
+url = "https://feeds.bbci.co.uk/arabic/rss.xml"
+type = "feed"
+topic = "arabic"
+
+[[seed]]
+url = "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml"
+type = "feed"
+topic = "chinese"
+
+[[seed]]
+url = "https://feeds.bbci.co.uk/russian/rss.xml"
+type = "feed"
+topic = "russian"
+
+[[seed]]
+url = "https://hnrss.org/frontpage"
+type = "feed"
+topic = "tech"
+
+[[seed]]
+url = "https://docs.python.org/3/"
+type = "page"
+topic = "docs"
+
+[[seed]]
+url = "https://fastapi.tiangolo.com/"
+type = "page"
+topic = "docs"
+
+[[seed]]
+url = "https://en.wikipedia.org/wiki/Main_Page"
+type = "page"
+topic = "knowledge"

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Talashly</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--line:#262b36;--text:#e8eaf0;--mute:#8b93a7;--acc:#7c9cff;--mark:#3b4a1f;--ok:#2ecc71;--bad:#e74c3c}
+@media (prefers-color-scheme:light){:root{--bg:#f6f7fb;--panel:#fff;--line:#e3e6ee;--text:#171a21;--mute:#667085;--acc:#3b5bdb;--mark:#fff3a3}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Naskh Arabic","Noto Sans Devanagari","Noto Sans CJK SC",sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:36px 16px 80px}
+h1{font-size:28px;margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 22px}
+form{display:flex;gap:8px}
+input[type=text],input[type=password]{flex:1;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:16px;outline:none}
+input:focus{border-color:var(--acc)}
+button{padding:0 22px;border-radius:12px;border:0;background:var(--acc);color:#fff;font-weight:600;font-size:15px;cursor:pointer}
+button.ghost{background:transparent;color:var(--mute);border:1px solid var(--line);padding:0 14px;height:34px;font-weight:500;font-size:13px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0 0;color:var(--mute);font-size:13px}
+.stats{display:flex;gap:16px;flex-wrap:wrap;color:var(--mute);font-size:13px;margin:14px 0 22px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px}
+.dot.off{background:var(--bad)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--mute)}
+.step{color:var(--mute);font-size:13px;margin:4px 0}
+.answer{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:14px 0 22px;display:none}
+.answer h3{margin:0 0 8px;font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between}
+#ans{white-space:pre-wrap;unicode-bidi:plaintext}
+.cursor::after{content:"▍";animation:b 1s steps(2) infinite;color:var(--acc)}
+@keyframes b{50%{opacity:0}}
+.res{padding:14px 0;border-bottom:1px solid var(--line)}
+.res a.t{color:var(--acc);font-size:18px;text-decoration:none;font-weight:600}
+.res a.t:hover{text-decoration:underline}
+.meta{color:var(--mute);font-size:13px;margin:2px 0 4px}
+.res p{margin:0;unicode-bidi:plaintext}
+mark{background:var(--mark);color:inherit;border-radius:3px;padding:0 2px}
+.n{display:inline-block;min-width:20px;text-align:center;background:var(--line);border-radius:6px;font-size:12px;margin-right:6px;color:var(--mute)}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;overflow:auto;font-size:13px;margin:6px 0 0}
+.empty{color:var(--mute);padding:30px 0;text-align:center}
+.err{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Talashly</h1>
+  <p class="sub">Apna crawler. Apna index. Apna brain. Koi third-party API nahi.</p>
+  <form id="f"><input type="text" id="q" placeholder="Kuch bhi poochein…  (code dhoondne ke liye shuru mein  code:  likhein)" autofocus autocomplete="off"><button>Search</button></form>
+  <div class="row">
+    <label><input type="checkbox" id="deep"> Deep mode (zyada sources, zyada tafseel)</label>
+    <span id="keybox"><input type="password" id="key" placeholder="API key (agar zaroori ho)" style="padding:6px 10px;font-size:13px;width:200px"></span>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div id="plan"></div>
+  <div id="steps"></div>
+  <div class="answer" id="abox"><h3><span>Jawab (sirf sources se)</span><span id="meta"></span></h3><div id="ans"></div></div>
+  <div id="code"></div>
+  <div id="res"></div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const el=(tag,props={},kids=[])=>{const e=document.createElement(tag);for(const[k,v]of Object.entries(props)){if(k==='text')e.textContent=v;else if(k==='class')e.className=v;else e.setAttribute(k,v)}for(const c of [].concat(kids))if(c)e.append(c);return e};
+function ago(ts){if(!ts)return'';const m=(Date.now()/1000-ts)/60;
+  if(m<60)return Math.max(1,Math.round(m))+' min pehle';if(m<1440)return Math.round(m/60)+' ghante pehle';return Math.round(m/1440)+' din pehle'}
+try{$('#key').value=localStorage.getItem('ss_key')||''}catch(e){}
+$('#key').addEventListener('change',()=>{try{localStorage.setItem('ss_key',$('#key').value.trim())}catch(e){}});
+const qs=(o)=>Object.entries(o).filter(([,v])=>v).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
+
+async function stats(){
+  try{const s=await (await fetch('/api/stats')).json();
+  const box=$('#stats');box.replaceChildren(
+    el('span',{},[el('span',{class:'dot'+(s.crawler_running?'':' off')}),'Crawler '+(s.crawler_running?'chal raha hai':'band')]),
+    el('span',{text:s.index.docs.toLocaleString()+' pages'}),el('span',{text:s.index.domains+' sites'}),
+    el('span',{text:s.index.queued.toLocaleString()+' queue mein'}),
+    s.index.code_chunks?el('span',{text:s.index.code_files+' code files'}):null,
+    s.last_indexed_at?el('span',{text:'aakhri update: '+ago(s.last_indexed_at)}):null)}catch(e){}
+}
+stats();setInterval(stats,15000);
+
+// snippet mein server <mark> deta hai: sirf <mark> allow, baqi sab text
+function snippetNode(s){const p=el('p');const parts=s.split(/(<mark>|<\/mark>)/);let inMark=false;
+  for(const part of parts){if(part==='<mark>'){inMark=true}else if(part==='</mark>'){inMark=false}else if(part){p.append(inMark?el('mark',{text:part}):document.createTextNode(part))}}return p}
+
+let es=null;
+$('#f').addEventListener('submit',e=>{
+  e.preventDefault();const q=$('#q').value.trim();if(!q)return;
+  if(es)es.close();
+  for(const id of ['plan','steps','code'])$('#'+id).replaceChildren();
+  $('#res').replaceChildren(el('div',{class:'empty',text:'Dhoond raha hoon…'}));
+  $('#abox').style.display='none';$('#ans').textContent='';$('#meta').textContent='';
+  const url='/api/answer?'+qs({q,key:$('#key').value.trim(),deep:$('#deep').checked?'1':''});
+  es=new EventSource(url);let first=true,gotAny=false;
+  const on=(n,fn)=>es.addEventListener(n,ev=>{gotAny=true;try{fn(JSON.parse(ev.data))}catch(x){console.error(x)}});
+  on('plan',p=>{const c=[];c.push(el('span',{class:'chip',text:'maqsad: '+(p.intent==='code'?'code':p.intent==='command'?'command':'sawal')}));
+    if(p.script)c.push(el('span',{class:'chip',text:'zaban/script: '+p.script}));
+    if(p.language)c.push(el('span',{class:'chip',text:'language: '+p.language}));
+    (p.subqueries||[]).slice(1).forEach(s=>c.push(el('span',{class:'chip',text:'↳ '+s})));
+    $('#plan').replaceChildren(el('div',{class:'chips'},c))});
+  on('step',s=>$('#steps').append(el('div',{class:'step',text:'• '+s.msg})));
+  on('sources',r=>{$('#res').replaceChildren(...(r.length?r.map(x=>el('div',{class:'res'},[
+      el('a',{class:'t',href:/^https?:/.test(x.url)?x.url:'#',target:'_blank',rel:'noopener noreferrer'},[el('span',{class:'n',text:x.n}),x.title]),
+      el('div',{class:'meta',text:x.domain+' · '+ago(x.published_at||x.fetched_at)}),snippetNode(x.snippet)])):
+      [el('div',{class:'empty',text:'Index mein abhi kuch nahi mila. Crawler chalne do ya seed add karein.'})]))});
+  on('code',r=>$('#code').replaceChildren(...r.map(c=>el('div',{class:'res'},[
+      el('div',{class:'meta',text:c.path+':'+c.start+'-'+c.end+' · '+c.lang}),el('pre',{text:c.text})]))));
+  on('token',t=>{if(first){$('#abox').style.display='block';$('#ans').classList.add('cursor');first=false}$('#ans').textContent+=t});
+  on('replace',t=>{$('#abox').style.display='block';$('#ans').textContent=t;$('#steps').append(el('div',{class:'step',text:'• Jawab ki jaanch: source se bahar ke hisse hata diye gaye.'}))});
+  on('done',d=>{$('#ans').classList.remove('cursor');
+    $('#meta').textContent=[d.mode,d.coverage!=null?('coverage '+Math.round(d.coverage*100)+'%'):'',d.took_ms!=null?(d.took_ms+' ms'):''].filter(Boolean).join(' · ');
+    es.close();stats()});
+  es.onerror=()=>{$('#ans').classList.remove('cursor');es.close();
+    if(!gotAny)$('#res').replaceChildren(el('div',{class:'empty err',text:'Server se jawab nahi aaya (API key ya connection check karein).'}))};
+});
+</script>
+</body>
+</html>

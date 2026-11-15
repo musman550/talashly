@@ -1,0 +1,9 @@
+services:
+  search:
+    build: .
+    restart: unless-stopped
+    ports: ["8000:8000"]
+    volumes:
+      - ./data:/app/data          # index.db yahan rehta hai (backup isi folder ka)
+      - ./config.toml:/app/config.toml:ro
+      - ./seeds.toml:/app/seeds.toml:ro
