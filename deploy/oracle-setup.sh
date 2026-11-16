@@ -8,6 +8,17 @@ REPO="${REPO:-https://github.com/musman550/talashly}"
 DIR="${DIR:-$HOME/talashly}"
 PUBLIC_URL="${PUBLIC_URL:-}"
 
+if ! command -v apt-get >/dev/null 2>&1; then
+  echo "Ye script Ubuntu/Debian ke liye hai (apt-get nahi mila). VM banate waqt image 'Canonical Ubuntu' chunein."; exit 1
+fi
+
+# Kam RAM (1 GB Micro VM) par build/chalne ke liye swap
+if [ "$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)" -lt 3000 ] && ! swapon --show | grep -q .; then
+  echo "[0/5] Kam RAM: 2 GB swap bana raha hoon..."
+  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile
+  grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+fi
+
 echo "[1/5] Docker install..."
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sudo sh
