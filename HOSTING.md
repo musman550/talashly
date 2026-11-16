@@ -20,6 +20,21 @@ Teen raaste, sab free se shuru:
 1. huggingface.co -> New Space -> SDK **Docker**. Repo ki files upload/push karein.
 2. Space ke `README.md` front-matter mein `app_port: 8000` rakhein. Variables mein `SS_SITE_URL` aur `SS_TRUST_PROXY=1` daalein.
 
+## D. Oracle Cloud Always Free VM (sab se behtar: kabhi sota nahi, disk mehfooz, crawler 24/7)
+Oracle ki docs ke mutabiq (jun 2026): Always Free mein Arm A1 total **2 OCPU + 12 GB RAM** (pehle 4 OCPU/24 GB tha), ya 2 AMD Micro VM (1 GB RAM),
+200 GB block storage, 10 TB/month outbound. Free account ke liye credit card verification lagti hai; kuch regions mein A1 "out of capacity" aa sakta hai.
+1. cloud.oracle.com par account banayein (home region soch kar chunein), phir Compute -> Instances -> Create instance:
+   image **Ubuntu 22.04/24.04**, shape **VM.Standard.A1.Flex** (2 OCPU, 12 GB) ya AMD Micro. SSH key download karein.
+2. Networking -> VCN -> Security List -> Ingress rule: Source `0.0.0.0/0`, TCP, port **8000**.
+3. VM par SSH karke: `curl -fsSL https://raw.githubusercontent.com/musman550/talashly/main/deploy/oracle-setup.sh | bash`
+   (Docker install, code download, firewall, `docker compose up -d` — restart/reboot par khud chalu). **Ye script maine asli Oracle VM par chala kar test nahi ki**; error aaye to output bhej dein.
+4. Browser: `http://<VM-public-IP>:8000`. HTTPS ke liye free Cloudflare Tunnel (option A wala `cloudflared`) VM par chalayein, phir `.env` mein `SS_SITE_URL=https://...` daal kar `sudo docker compose up -d`.
+5. Oracle **idle** instance wapas le sakta hai (7 din tak CPU/network/memory 20% se kam). Crawler chalta rahe to theek; sirf ping se ye nahi rukta.
+
+## Sleep/alert ke liye alag repo: `talashly-monitor`
+Alag chhota GitHub repo jo har 10 minute server ko ping karta hai (Render jaise sone wale hosts ke liye) aur down hone par GitHub Issue + email alert deta hai.
+Oracle VM ko ping ki zarurat nahi, lekin alert ke liye ye phir bhi kaam ka hai. Files: `talashly-monitor` repo ki README dekhein.
+
 ## Zaroori settings (live par)
 - `[server] require_key = false` rakhein agar sab ko bina key chat karni ho; API (`/v1`) hamesha key maangti hai.
 - Quota/limits `config.toml` ke `[chat]` section mein (`daily_quota_anon`, `daily_quota_key`, `max_concurrent`, `queue_max`);
