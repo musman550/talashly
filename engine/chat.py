@@ -15,6 +15,7 @@ from .brain import Brain
 from .db import DB
 from .lang import reply_lang, tr
 from .models import Model, get_model
+from .policy import is_unclear, policy_check, strip_cites, wants_sources
 from .search import Searcher, terms
 
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -22,10 +23,10 @@ CLIENT_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
 
 # ------------------------------------------------------------------ small talk (insani baat-cheet)
 PATTERNS: dict[str, re.Pattern] = {
-    "greet": re.compile(r"^(hi+|hello+|hey+|hiya|yo|salam|salaam|slm|aoa|assalam\w*( o)?( alaikum| alaykum)?|"
+    "greet": re.compile(r"^(h+[iy]+|h+e+y+|h+e+l+o+|hlo+|hlw|hallo|hiya|yo|sup|wassup|what'?s up|salam|salaam|slm|aoa|assalam\w*( o)?( alaikum| alaykum)?|"
                         r"good (morning|afternoon|evening)|namaste|hola|bonjour|hallo|ciao|"
                         r"سلام|السلام علیکم|السلام عليكم|ہیلو|ہائے|नमस्ते|नमस्कार|你好|您好|привет|здравствуйте|こんにちは)"
-                        r"( there| talashly| mus)?$"),
+                        r"( there| talashly| mus| ji| bhai| dost| sir)?$"),
     "thanks": re.compile(r"^(thanks?|thank you( so much)?|thx|ty|shukriya|shukria|jazak\w*|mehrbani|"
                          r"شکریہ|شکراً|شكرا|धन्यवाद|शुक्रिया|谢谢|спасибо|gracias|merci|danke)( a lot| bohat| bahut)?$"),
     "bye": re.compile(r"^(bye+|goodbye|good night|see you|khuda hafiz|allah hafiz|khudahafiz|allahhafiz|"
@@ -45,11 +46,9 @@ PATTERNS: dict[str, re.Pattern] = {
 
 REPLIES: dict[str, dict[str, list[str]]] = {
     "greet": {
-        "en": ["Hello! Ask me anything - I'll answer from sources I've actually crawled, with citations.",
-               "Hi there! What would you like to find out today?"],
-        "roman": ["Assalam o alaikum! Kuch bhi poochein - main apne crawl kiye hue sources se citations ke saath jawab dunga.",
-                  "Salam! Aaj kya jaanna chahte hain?"],
-        "ur": ["السلام علیکم! جو چاہیں پوچھیں، میں اپنے جمع کیے ہوئے ذرائع سے حوالوں کے ساتھ جواب دوں گا۔"],
+        "en": ["Hello! How can I help you today?"],
+        "roman": ["Assalam o alaikum! Main aap ki kya madad kar sakta hoon?"],
+        "ur": ["السلام علیکم! میں آپ کی کیا مدد کر سکتا ہوں؟"],
     },
     "thanks": {
         "en": ["You're welcome! Ask away if there's anything else.", "Happy to help - anything else?"],
@@ -67,21 +66,14 @@ REPLIES: dict[str, dict[str, list[str]]] = {
         "ur": ["میں بالکل ٹھیک کام کر رہا ہوں، شکریہ۔ میں AI ہوں، مدد کے لیے تیار ہوں۔ کیا پوچھنا ہے؟"],
     },
     "who": {
-        "en": ["I'm {name}, the answer engine of Talashly. I'm an AI, not a human. I search an index of pages Talashly has "
-               "crawled itself and answer with citations; if the sources don't contain the answer, I say so instead of guessing."],
-        "roman": ["Main {name} hoon, Talashly ka answer engine. Main AI hoon, insan nahi. Main Talashly ke apne crawl kiye "
-                  "hue pages ke index se citations ke saath jawab deta hoon; sources mein jawab na ho to andaza lagane ki "
-                  "bajaye saaf bata deta hoon."],
-        "ur": ["میں {name} ہوں، Talashly کا انسر انجن۔ میں AI ہوں، انسان نہیں۔ میں Talashly کے اپنے جمع کیے ہوئے "
-               "صفحات سے حوالوں کے ساتھ جواب دیتا ہوں؛ ذرائع میں جواب نہ ہو تو اندازہ لگانے کی بجائے صاف بتا دیتا ہوں۔"],
+        "en": ["I'm {name}, Talashly's AI assistant. I'm an AI, not a human. Ask me anything and I'll do my best; if I'm not sure, I'll say so instead of guessing."],
+        "roman": ["Main {name} hoon, Talashly ka AI assistant. Main AI hoon, insan nahi. Kuch bhi poochein, main apni poori koshish karunga; agar yaqeen na ho to andaza lagane ki bajaye saaf bata dunga."],
+        "ur": ["میں {name} ہوں، Talashly کا AI اسسٹنٹ۔ میں AI ہوں، انسان نہیں۔ کچھ بھی پوچھیں، میں پوری کوشش کروں گا؛ یقین نہ ہو تو اندازہ لگانے کی بجائے صاف بتا دوں گا۔"],
     },
     "help": {
-        "en": ["I can: answer questions with citations, research a topic in depth (try the Deep model), search your indexed "
-               "code (Code model), and work in many languages. Just type a question."],
-        "roman": ["Main ye kar sakta hoon: citations ke saath sawalon ke jawab, kisi topic par gehri research (Deep model), "
-                  "aap ka index kiya hua code search (Code model), aur kai zabanon mein kaam. Bas sawal likhein."],
-        "ur": ["میں حوالوں کے ساتھ سوالوں کے جواب دے سکتا ہوں، کسی موضوع پر گہری تحقیق (Deep ماڈل)، آپ کا انڈیکس شدہ کوڈ "
-               "تلاش (Code ماڈل)، اور کئی زبانوں میں کام۔ بس سوال لکھیں۔"],
+        "en": ["I can answer questions in many languages, explain topics, and help with code. Pick the Deep model if you want in-depth research with its sources. Just type your question."],
+        "roman": ["Main kai zabanon mein sawalon ke jawab de sakta hoon, topics samjha sakta hoon aur code mein madad kar sakta hoon. Gehri research aur uske sources ke liye Deep model chunein. Bas sawal likhein."],
+        "ur": ["میں کئی زبانوں میں سوالوں کے جواب دے سکتا ہوں، موضوعات سمجھا سکتا ہوں اور کوڈ میں مدد کر سکتا ہوں۔ گہری تحقیق اور اس کے ذرائع کے لیے Deep ماڈل چنیں۔ بس سوال لکھیں۔"],
     },
 }
 
@@ -246,14 +238,19 @@ class Chat:
             else:
                 yield "meta", {"model": model.id}
 
+            show = wants_sources(text, model)
             talk = smalltalk(text, model)
-            if talk is not None:
+            verdict = None if talk is not None else policy_check(text)
+            if talk is None and verdict is None and is_unclear(text):
+                verdict = "clarify"
+            if talk is not None or verdict is not None:
+                talk = talk if talk is not None else tr(verdict, text)  # type: ignore[arg-type]
                 buf = talk
                 yield "token", talk
-                done = {"mode": "chat", "model": model.id}
+                done = {"mode": "chat" if verdict is None else verdict, "model": model.id}
             else:
                 eq = contextualize(text, prev_user)
-                if eq != text:
+                if show and eq != text:
                     yield "rewrite", {"query": eq}
                 bq = eq
                 if model.code_first and not re.match(r"\s*code:", eq, re.I) and self.searcher.search_code(eq, None, 1):
@@ -262,23 +259,32 @@ class Chat:
                     async for ev, data in self.brain.run(
                             bq, role, deep=model.deep, live=model.live, sentences=model.sentences,
                             nsources=model.sources, weak_cov=model.weak_cov, stream_delay=0.004):
+                        if ev == "done":
+                            done = dict(data)
+                            done["model"] = model.id
+                            continue  # done ham aakhir mein khud bhejte hain
+                        if not show:
+                            if ev in ("plan", "step", "sources"):
+                                continue  # process/sources default mein nahi dikhte
+                            if ev in ("token", "replace"):
+                                data = strip_cites(data)
                         if ev == "token":
                             buf += data
                         elif ev == "replace":
                             buf = data
                         elif ev == "sources":
                             sources = data
-                        elif ev == "done":
-                            done = dict(data)
-                            done["model"] = model.id
-                            continue  # done ham aakhir mein khud bhejte hain
                         yield ev, data
+                    if not show and strip_cites(buf) != buf:  # tukron mein bate marker ka bachav
+                        buf = strip_cites(buf)
+                        yield "replace", buf
                 except Exception as e:  # noqa: BLE001  koi bug ho to bhi user ko saaf jawab; log mein record
                     self.db.log("error", f"chat failed {type(e).__name__}: {e}")
                     msg = tr("error", text)
                     buf = (buf + "\n\n" if buf else "") + msg
                     yield "token", msg
                     done = {"mode": "error", "model": model.id}
+            done["sources_shown"] = bool(show and sources)
             done["took_ms"] = round((time.time() - t0) * 1000)
             if persist:
                 self._add(conv_id, "assistant", buf, {"sources": sources, "done": done, "model": model.id})  # type: ignore[arg-type]

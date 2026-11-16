@@ -6,10 +6,10 @@ No third-party search or AI APIs. Chat UI, five free `MUS 7.01` models, and an O
 Website: https://musman550.github.io/talashly/ · Hosting guide: [HOSTING.md](HOSTING.md)
 
 ## What you get
-- **Chat website** (Claude-style): streaming answers, citations, conversation history, model picker, dark/light, mobile-ready.
+- **Chat website** (Claude-style): streaming answers, conversation history, model picker, dark/light, mobile-ready.
 - **Own crawler**: robots.txt and crawl-delay aware, sitemaps, ETag, dedupe, adaptive recrawl, 24/7 or time windows.
 - **Own index**: SQLite FTS5 (BM25 + freshness + domain diversity) with a trigram index for Chinese/Japanese/Korean/Thai.
-- **Grounded answers**: sentences come from indexed pages and carry `[n]` citations. No evidence means it says so; it never invents.
+- **Grounded answers**: sentences come from indexed pages. Sources, citations and research steps are hidden by default and shown only for the Deep model or when the user asks ("with sources", "deep research"). No evidence means it says so; it never invents.
 - **Models (all free)**: `mus-7.01` (balanced), `-flash` (fastest), `-deep` (multi-step research), `-code` (your code first), `-polyglot` (non-English).
   These are answer-engine profiles over the same index, not separately trained neural networks. A local LLM (llama.cpp) can be attached to write the text; every sentence is still verified against the sources.
 - **API**: `POST /v1/chat/completions` (OpenAI format, streaming), `GET /v1/models`, `POST /api/keys` (free self-serve keys), plus `/api/search`, `/api/code`, `/api/chat`.

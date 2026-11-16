@@ -7,8 +7,8 @@ URDU_LETTERS = re.compile(r"[ٹڈڑںےگچھۓیکہپ]")  # Urdu/Farsi ke huro
 ROMAN_MARKERS = {"assalam", "assalamualaikum", "alaikum", "walaikum", "aoa", "kya", "hai", "hain", "aap", "tum",
                  "kaise", "kese", "kaisa", "salam", "salaam", "shukriya", "shukria", "mujhe", "mujy", "nahi", "nahin",
                  "haan", "kaun", "kon", "btao", "batao", "bataiye", "khuda", "allah", "hafiz", "yar", "yaar", "bhai",
-                 "janab", "karo", "karna", "sakte", "sakta", "naam", "mera", "meri", "apna", "kia", "hy", "kaam",
-                 "kaisay", "kyun", "kyon", "iska", "uska", "mein", "main", "wala", "wali"}
+                 "janab", "karo", "karna", "sakte", "sakta", "naam", "mera", "meri", "apna", "kia", "kaam",
+                 "kaisay", "kyun", "kyon", "iska", "uska", "mein", "main", "wala", "wali"}  # "hy"/"he" jaan-boojh kar nahi (hy = hi bhi hota hai)
 
 
 def reply_lang(text: str) -> str:
@@ -22,13 +22,25 @@ def reply_lang(text: str) -> str:
 
 MSG: dict[str, dict[str, str]] = {
     "none": {
-        "en": "I don't have an answer to that in my index yet. I've noted the question and will try again when the crawler brings in new content.",
-        "roman": "Mere index mein is sawal ka jawab abhi nahi hai. Maine ise note kar liya hai; crawler naya content layega to dobara koshish karunga.",
-        "ur": "میرے انڈیکس میں اس سوال کا جواب ابھی نہیں ہے۔ میں نے اسے نوٹ کر لیا ہے؛ نیا مواد آنے پر دوبارہ کوشش کروں گا۔"},
+        "en": "I don't have a good answer to that yet. I've noted it and will keep learning. You could also try asking it in different words.",
+        "roman": "Is sawal ka achha jawab mere paas abhi nahi hai. Maine note kar liya hai aur seekhta rahunga. Aap sawal doosre alfaaz mein bhi pooch sakte hain.",
+        "ur": "اس سوال کا اچھا جواب میرے پاس ابھی نہیں ہے۔ میں نے نوٹ کر لیا ہے اور سیکھتا رہوں گا۔ آپ سوال دوسرے الفاظ میں بھی پوچھ سکتے ہیں۔"},
     "nosent": {
-        "en": "I found sources (see below) but none of them contains a sentence that answers this directly.",
-        "roman": "Sources mile hain (neeche dekhein) lekin un mein seedha jawab wala jumla nahi mila.",
-        "ur": "ذرائع ملے ہیں (نیچے دیکھیں) لیکن ان میں براہِ راست جواب والا جملہ نہیں ملا۔"},
+        "en": "I found some related information, but nothing that answers this directly. Could you rephrase it or add more detail?",
+        "roman": "Kuch mutaalliqa maloomat mili hai lekin seedha jawab nahi mila. Kya aap sawal thora aur wazeh kar sakte hain?",
+        "ur": "کچھ متعلقہ معلومات ملی ہیں لیکن براہِ راست جواب نہیں ملا۔ کیا آپ سوال کو مزید واضح کر سکتے ہیں؟"},
+    "clarify": {
+        "en": "I didn't quite get that. What would you like to know?",
+        "roman": "Mujhe samajh nahi aaya. Aap kya jaanna chahte hain?",
+        "ur": "مجھے سمجھ نہیں آیا۔ آپ کیا جاننا چاہتے ہیں؟"},
+    "refuse": {
+        "en": "Sorry, I can't help with that. I'm happy to help with something else.",
+        "roman": "Maazrat, main is mein madad nahi kar sakta. Kuch aur poochna ho to zaroor batayein.",
+        "ur": "معذرت، میں اس میں مدد نہیں کر سکتا۔ کچھ اور پوچھنا ہو تو ضرور بتائیں۔"},
+    "support": {
+        "en": "I'm really sorry you're going through this, and I'm glad you said it out loud. You don't have to carry it alone: please contact your local emergency number or someone you trust right now. I'm here to talk as well.",
+        "roman": "Mujhe bahut afsos hai ke aap is se guzar rahe hain, aur aap ne baat kahi ye achha kiya. Aap ko akele nahi sehna: abhi apne ilaqe ki emergency service ya kisi bharosemand shakhs se rabta karein. Main bhi baat karne ke liye yahan hoon.",
+        "ur": "مجھے بہت افسوس ہے کہ آپ اس سے گزر رہے ہیں، اور آپ نے بات کہی یہ اچھا کیا۔ آپ کو اکیلے نہیں سہنا: ابھی اپنے علاقے کی ایمرجنسی سروس یا کسی بھروسے مند شخص سے رابطہ کریں۔ میں بھی بات کرنے کے لیے یہاں ہوں۔"},
     "weak": {
         "en": "My index answer is weak, so I'm checking live sources...",
         "roman": "Index mein jawab kamzor hai, live sources se la raha hoon...",

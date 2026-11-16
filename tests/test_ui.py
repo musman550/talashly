@@ -82,7 +82,7 @@ def test_chat_stream_citations_history_and_reload(server, page):
     url, _ = server
     page.goto(url)
     page.wait_for_selector("#model option", state="attached")
-    ask(page, "what does a polite crawler do")
+    ask(page, "what does a polite crawler do, with sources")
     body = page.locator(".msg.bot .body").last
     assert "robots.txt" in body.inner_text()
     cites = page.locator(".msg.bot a.cite")
@@ -98,7 +98,7 @@ def test_chat_stream_citations_history_and_reload(server, page):
     page.wait_for_selector(".msg.bot .body")
     assert page.locator(".msg.user").count() == 1 and "robots.txt" in page.locator(".msg.bot .body").inner_text()
     # follow-up in same conversation
-    ask(page, "why is that important?")
+    ask(page, "why is that important? with sources")
     assert page.locator(".msg.user").count() == 2
     # delete
     page.hover(".conv")
@@ -112,18 +112,20 @@ def test_small_talk_and_no_answer_are_honest(server, page):
     url, _ = server
     page.goto(url)
     page.wait_for_selector("#model option", state="attached")
+    ask(page, "hy")
+    assert page.locator(".msg.bot .body").last.inner_text().strip() == "Hello! How can I help you today?"
     ask(page, "salam")
     assert page.locator(".srcs").count() == 0
     assert any(w in page.locator(".msg.bot .body").last.inner_text() for w in ("Assalam", "Salam"))
     ask(page, "qwertyuiop asdfghjkl unknownthing")
-    assert "don't have an answer" in page.locator(".msg.bot .body").last.inner_text()
+    assert "good answer" in page.locator(".msg.bot .body").last.inner_text()
 
 
 def test_xss_in_titles_is_inert(server, page):
     url, _ = server
     page.goto(url)
     page.wait_for_selector("#model option", state="attached")
-    ask(page, "zorbulator configuration")
+    ask(page, "zorbulator configuration, with sources")
     assert page.evaluate("window.__xss") is None
     assert page.locator(".srcs img").count() == 0 and page.locator(".msg.bot img").count() == 0
     assert "<img" in page.locator(".srcs").inner_text()  # literal text, markup nahi
@@ -137,6 +139,7 @@ def test_model_switch_persists(server, page):
     page.select_option("#model", "mus-7.01-flash")
     assert "Index only" in page.locator("#mdesc").inner_text()
     ask(page, "polite crawler")
+    assert page.locator(".srcs").count() == 0 and "[1]" not in page.locator(".msg.bot .body").last.inner_text()
     assert "mus-7.01-flash" in page.locator(".msg.bot .foot").last.inner_text()
     page.reload()
     page.wait_for_selector("#model option", state="attached")

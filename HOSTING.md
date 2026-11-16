@@ -41,3 +41,9 @@ Oracle VM ko ping ki zarurat nahi, lekin alert ke liye ye phir bhi kaam ka hai. 
   `0` quota = unlimited. Limits server ko dump hone se bachati hain.
 - Admin key `data/admin_key.txt` mein hoti hai (hosting par logs/shell se lein); kabhi public na karein.
 - `SS_TRUST_PROXY=1` sirf proxy ke peeche (Render/HF/Cloudflare) lagayein, warna rate-limit IP spoof ho sakta hai.
+
+
+## Auto-update (Oracle VM)
+`deploy/oracle-setup.sh` ek systemd timer lagata hai jo har 5 minute mein GitHub `main` dekhta hai; naya code ho to
+khud rebuild + restart karta hai (data `./data` safe rehta hai), aur health fail ho to container dobara chalata hai.
+Ek dafa script dobara chalayein (purane VM par): `curl -fsSL https://raw.githubusercontent.com/musman550/talashly/main/deploy/oracle-setup.sh | bash`

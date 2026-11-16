@@ -32,12 +32,12 @@ class Model:
 
 MODELS: dict[str, Model] = {m.id: m for m in (
     Model("mus-7.01", "MUS 7.01", "Balanced - everyday questions",
-          "Default model. Searches its own index first, then live sources if the answer is weak. Up to 5 sentences, 6 citations."),
+          "Default model. Searches its own index first, then live sources if the answer is weak. Short answers; sources are shown only when you ask for them."),
     Model("mus-7.01-flash", "MUS 7.01 Flash", "Fastest",
-          "Index only (no live fetching), up to 3 sentences, 4 citations. Answers in milliseconds.",
+          "Index only (no live fetching), very short answers in milliseconds.",
           live=False, sentences=3, sources=4),
     Model("mus-7.01-deep", "MUS 7.01 Deep", "Deep research",
-          "Splits the question into parts, reads more sources, up to 8 sentences and 10 citations.",
+          "Splits the question into parts, reads more sources, longer answers, and it shows its sources and the research steps.",
           deep=True, sentences=8, sources=10, context="deep"),
     Model("mus-7.01-code", "MUS 7.01 Code", "Coding help",
           "Searches code you indexed first (functions, classes, identifiers), then documentation.",

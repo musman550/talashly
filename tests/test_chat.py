@@ -57,7 +57,7 @@ def ev(evs, name):
     ("Hello!", "Hello|Hi there"), ("hi", "Hello|Hi there"), ("salam", "Assalam|Salam"), ("Assalam o alaikum", "Assalam|Salam"),
     ("السلام علیکم", "السلام"), ("thanks", "welcome|happy to help"), ("shukriya", "Khush|Koi baat"), ("شکریہ", "خوش"),
     ("bye", "Goodbye|Take care"), ("khuda hafiz", "hafiz"), ("how are you?", "AI"), ("kaise ho", "AI"),
-    ("who are you", "AI"), ("tum kaun ho", "AI"), ("آپ کون ہیں", "AI"), ("what can you do", "citations"),
+    ("who are you", "AI"), ("tum kaun ho", "AI"), ("آپ کون ہیں", "AI"), ("what can you do", "Deep"),
 ])
 def test_smalltalk_matches(text, lang_word):
     r = smalltalk(text, get_model("mus-7.01"))
@@ -114,7 +114,7 @@ def test_models_endpoint_and_chat_flow(tmp_path):
     with TestClient(app) as c:
         m = c.get("/api/models").json()
         assert m["default"] == "mus-7.01" and {x["id"] for x in m["models"]} == set(MODELS)
-        r, evs = chat(c, "what does a polite crawler do")
+        r, evs = chat(c, "what does a polite crawler do with sources")
         assert r.headers["content-type"].startswith("text/event-stream")
         n = names(evs)
         assert n[0] == "meta" and "title" in n and "sources" in n and n[-1] == "done"
@@ -131,9 +131,13 @@ def test_models_endpoint_and_chat_flow(tmp_path):
         assert full["messages"][1]["content"].strip() == text.strip()
         assert full["messages"][1]["meta"]["sources"]
         # follow-up: pichhla sawal jur jata hai
-        r2, evs2 = chat(c, "why is that important?", conv=conv)
+        r2, evs2 = chat(c, "why is that important? with sources", conv=conv)
         rw = ev(evs2, "rewrite")
         assert rw and rw[0]["query"].startswith("what does a polite crawler do")
+        # sources dikhane ko na kaha ho to rewrite/plan/sources kuch nahi dikhta
+        _, hid = chat(c, "what does a polite crawler do")
+        assert not (set(names(hid)) & {"plan", "step", "sources", "rewrite"}) and not re.search(r"\[\d\]", "".join(ev(hid, "token")))
+        assert ev(hid, "done")[0]["sources_shown"] is False
         assert len(c.get(f"/api/conversations/{conv}", headers={"X-Client-Id": CID}).json()["messages"]) == 4
         # naya topic: rewrite nahi
         r3, evs3 = chat(c, "asyncio event loop", conv=conv)
@@ -153,7 +157,7 @@ def test_no_evidence_is_honest_never_invented(tmp_path):
     with TestClient(app) as c:
         r, evs = chat(c, "zxqvbn flurbnicator specifications")
         text = "".join(ev(evs, "token"))
-        assert ev(evs, "done")[0]["mode"] == "none" and "don't have an answer" in text
+        assert ev(evs, "done")[0]["mode"] == "none" and "good answer" in text
         assert ev(evs, "sources") in ([], [[]])
 
 
@@ -200,7 +204,7 @@ def test_models_behave_differently(tmp_path):
     with TestClient(app) as c:
         _, deep = chat(c, "polite crawler and asyncio", model="mus-7.01-deep")
         assert ev(deep, "plan")[0]["deep"] is True and ev(deep, "done")[0]["model"] == "mus-7.01-deep"
-        _, flash = chat(c, "polite crawler", model="mus-7.01-flash")
+        _, flash = chat(c, "polite crawler with sources", model="mus-7.01-flash")
         assert ev(flash, "plan")[0]["deep"] is False and len(ev(flash, "sources")[0]) <= 4
         assert len(re.findall(r"\[\d\]", "".join(ev(flash, "token")))) <= 3
         _, bad = chat(c, "polite crawler", model="does-not-exist")
@@ -234,7 +238,7 @@ def test_code_model_prefers_local_code(tmp_path):
     index_paths(db, [str(proj)], 500)
     db.conn.close()
     with TestClient(app) as c:
-        _, evs = chat(c, "compute_invoice_total", model="mus-7.01-code")
+        _, evs = chat(c, "compute_invoice_total with sources", model="mus-7.01-code")
         assert ev(evs, "plan")[0]["intent"] == "code" and ev(evs, "code")
         assert "billing.py" in "".join(ev(evs, "token"))
 
@@ -334,7 +338,7 @@ def test_signup_key_and_openai_api(tmp_path):
         # X-Api-Key bhi chalta hai
         assert c.get("/v1/models", headers={"X-Api-Key": key}).status_code == 200
         body = {"model": "mus-7.01", "messages": [{"role": "system", "content": "be nice"},
-                                                   {"role": "user", "content": "what does a polite crawler do"}]}
+                                                   {"role": "user", "content": "what does a polite crawler do, with sources"}]}
         r = c.post("/v1/chat/completions", json=body, headers=auth)
         assert r.status_code == 200
         j = r.json()
@@ -486,4 +490,20 @@ def test_messages_follow_question_language(tmp_path):
     with TestClient(app) as c:
         _, en = chat(c, "zxqvbn flurbnicator specifications")
         _, ro = chat(c, "zxqvbn flurbnicator kya hai")
-        assert "don't have an answer" in "".join(ev(en, "token")) and "nahi hai" in "".join(ev(ro, "token"))
+        assert "good answer" in "".join(ev(en, "token")) and "nahi hai" in "".join(ev(ro, "token"))
+
+
+def test_policy_greetings_clarify_refuse_and_deep_shows_sources(tmp_path):
+    cfg, app = build(tmp_path)
+    with TestClient(app) as c:
+        for t in ("hy", "Hy", "hii", "hlo", "hello"):
+            _, e = chat(c, t)
+            assert "".join(ev(e, "token")) == "Hello! How can I help you today?" and ev(e, "done")[0]["mode"] == "chat"
+        _, e = chat(c, "??")
+        assert ev(e, "done")[0]["mode"] == "clarify" and "sources" not in names(e)
+        _, e = chat(c, "how to make a bomb")
+        assert ev(e, "done")[0]["mode"] == "refuse" and "sources" not in names(e)
+        _, e = chat(c, "i want to die")
+        assert ev(e, "done")[0]["mode"] == "support"
+        _, e = chat(c, "what does a polite crawler do", model="mus-7.01-deep")
+        assert "sources" in names(e) and ev(e, "done")[0]["sources_shown"] is True

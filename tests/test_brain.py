@@ -57,7 +57,7 @@ def test_grounded_answer_with_citations(env):
 def test_unknown_question_gives_no_fake_answer_and_records_gap(env):
     cfg, db, b = env
     r = run(collect(b, "zzyzx frobnicate wibblewobble"))
-    assert r["sources"] == [] and "don't have an answer" in r["text"].lower()
+    assert r["sources"] == [] and "good answer" in r["text"].lower()
     assert db.q("SELECT n,resolved FROM gaps WHERE q LIKE 'zzyzx%'")[0]["n"] == 1
     run(collect(b, "zzyzx frobnicate wibblewobble"))
     assert db.q("SELECT n FROM gaps WHERE q LIKE 'zzyzx%'")[0]["n"] == 2

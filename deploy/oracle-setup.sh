@@ -33,10 +33,9 @@ cd "$DIR"
 mkdir -p data && sudo chown -R 1000:1000 data
 
 echo "[3/5] Settings (.env)..."
-{
-  echo "SS_SITE_URL=${PUBLIC_URL}"
-  echo "SS_TRUST_PROXY=0"
-} > .env
+if [ ! -f .env ] || [ -n "$PUBLIC_URL" ]; then   # purani settings na mitayen
+  { echo "SS_SITE_URL=${PUBLIC_URL}"; echo "SS_TRUST_PROXY=0"; } > .env
+fi
 
 echo "[4/5] Firewall (Ubuntu iptables, port 8000)..."
 if ! sudo iptables -C INPUT -p tcp --dport 8000 -j ACCEPT 2>/dev/null; then
@@ -45,12 +44,37 @@ if ! sudo iptables -C INPUT -p tcp --dport 8000 -j ACCEPT 2>/dev/null; then
     (sudo apt-get install -y iptables-persistent >/dev/null 2>&1 && sudo netfilter-persistent save) || true
 fi
 
-echo "[5/5] Start (24/7, restart on reboot)..."
+echo "[5/5] Start (24/7, restart on reboot) + auto-update..."
 sudo docker compose up -d --build
-sleep 8
-if curl -fsS http://127.0.0.1:8000/api/health | grep -q '"status"'; then
-  echo "OK: Talashly chal raha hai. Ab Oracle console mein VCN Security List mein TCP 8000 ingress allow karein,"
-  echo "phir browser mein http://<VM-public-IP>:8000 kholein."
-else
-  echo "Server abhi jawab nahi de raha. Logs: sudo docker compose logs --tail 80"; exit 1
-fi
+chmod +x deploy/auto-update.sh
+sudo tee /etc/systemd/system/talashly-update.service >/dev/null <<UNIT
+[Unit]
+Description=Talashly auto-update
+[Service]
+Type=oneshot
+Environment=HOME=$HOME
+Environment=DIR=$DIR
+ExecStart=$DIR/deploy/auto-update.sh
+UNIT
+sudo tee /etc/systemd/system/talashly-update.timer >/dev/null <<UNIT
+[Unit]
+Description=Talashly auto-update every 5 min
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target
+UNIT
+sudo systemctl daemon-reload
+sudo systemctl enable --now talashly-update.timer >/dev/null
+
+echo "Server ka intezar (1 GB VM par 1-2 minute lag sakte hain)..."
+for i in $(seq 1 40); do
+  if curl -fsS http://127.0.0.1:8000/api/health | grep -q '"status"'; then
+    echo "OK: Talashly chal raha hai (auto-update har 5 minute). Browser: http://<VM-public-IP>:8000"
+    echo "Note: Oracle console mein VCN Security List mein TCP 8000 ingress allow hona chahiye."
+    exit 0
+  fi
+  sleep 5
+done
+echo "Server abhi jawab nahi de raha. Logs: sudo docker compose logs --tail 80"; exit 1
