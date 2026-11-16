@@ -4,6 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/musman550/talashly/main/deploy/oracle-setup.sh | bash
 # Optional: PUBLIC_URL=https://aap-ka-domain.example  (SEO/sitemap ke liye)
 set -euo pipefail
+export HOME="${HOME:-/root}"   # cloud-init mein HOME set nahi hota
 REPO="${REPO:-https://github.com/musman550/talashly}"
 DIR="${DIR:-$HOME/talashly}"
 PUBLIC_URL="${PUBLIC_URL:-}"
