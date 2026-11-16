@@ -1,0 +1,18 @@
+# Render.com "Blueprint": repo connect karein -> New -> Blueprint -> is file ko detect kar lega.
+# Free plan par service 15 min idle ke baad so jati hai aur disk mita diya jata hai (index dobara crawl se banta hai).
+# 24/7 + index mehfooz rakhne ke liye paid plan + disk lein (neeche comment).
+services:
+  - type: web
+    name: talashly
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: SS_TRUST_PROXY
+        value: "1"
+      - key: SS_SITE_URL
+        sync: false      # deploy ke baad apna public URL yahan daalein, misal https://talashly.onrender.com
+    # disk:               # paid plan par uncomment karein taake data/ restart par na mite
+    #   name: data
+    #   mountPath: /app/data
+    #   sizeGB: 5

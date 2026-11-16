@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://musman550.github.io/talashly/sitemap.xml

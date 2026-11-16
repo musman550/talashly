@@ -8,14 +8,22 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+import re
+import secrets
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, PlainTextResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ConfigDict, Field
 
 from .brain import Brain
+from .chat import CLIENT_ID, Chat, format_with_sources
 from .config import ROOT, load_config, load_seeds, load_sources
 from .db import DB, domain_of, normalize_url
+from .lang import tr
 from .llm import llm_alive
+from .models import MODELS, get_model
 from .search import Searcher, snippet, terms
 from .supervisor import Supervisor
 from .users import RateLimiter, authenticate, create_user, ensure_admin
@@ -42,6 +50,36 @@ class UserIn(BaseModel):
     rate_per_min: int = Field(default=60, ge=1, le=100000)
 
 
+class ChatIn(BaseModel):
+    message: str = Field(min_length=1, max_length=20000)
+    conversation_id: str | None = Field(default=None, max_length=64)
+    model: str | None = Field(default=None, max_length=64)
+
+
+class KeyIn(BaseModel):
+    label: str = Field(default="", max_length=40)
+
+
+class OAIChat(BaseModel):
+    model_config = ConfigDict(extra="allow")  # temperature, max_tokens waghera ignore, error nahi
+    model: str | None = None
+    messages: list[dict[str, Any]] = Field(min_length=1, max_length=200)
+    stream: bool = False
+
+
+def _oai_error(status: int, message: str, code: str, typ: str = "invalid_request_error") -> JSONResponse:
+    return JSONResponse({"error": {"message": message, "type": typ, "code": code}}, status_code=status)
+
+
+def _msg_text(m: dict) -> str:
+    c = m.get("content")
+    if isinstance(c, str):
+        return c
+    if isinstance(c, list):  # OpenAI content parts
+        return " ".join(p.get("text", "") for p in c if isinstance(p, dict) and p.get("type") == "text")
+    return ""
+
+
 class CodeIn(BaseModel):
     paths: list[str] = Field(min_length=1, max_length=20)
 
@@ -59,6 +97,9 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     crawl = (os.environ.get("SS_CRAWL", "1") == "1") if crawl is None else crawl
     sup = Supervisor(cfg, db, brain, seeds if seeds is not None else load_seeds(), crawl)
     limiter = RateLimiter()
+    chat = Chat(cfg, db, brain, searcher)
+    site_url = str(cfg["site"]["url"]).rstrip("/")
+    site_name = str(cfg["site"]["name"])
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -75,20 +116,58 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     app.state.db, app.state.brain, app.state.sup, app.state.cfg = db, brain, sup, cfg
 
     # ---------------------------------------------------------------- auth
-    async def current_user(request: Request, x_api_key: str = Header(default=""), key: str = "") -> dict:
+    def _key_from(x_api_key: str, authorization: str, key: str) -> str:
         k = x_api_key or key
+        if not k and authorization.lower().startswith("bearer "):
+            k = authorization[7:].strip()
+        return k
+
+    def _resolve(request: Request, k: str, strict: bool) -> dict:
         if k:
             u = authenticate(db, k)
             if not u:
                 raise HTTPException(401, "invalid api key")
-        elif cfg["server"]["require_key"]:
+        elif strict or cfg["server"]["require_key"]:
             raise HTTPException(401, "api key required")
         else:
             u = {"id": 0, "name": "anonymous", "role": "user", "rate_per_min": cfg["server"]["rate_per_min"]}
         ident = f"u{u['id']}" if u["id"] else f"ip:{request.client.host if request.client else '?'}"
         if not limiter.allow(ident, u["rate_per_min"]):
-            raise HTTPException(429, "rate limit: thora ruk kar dobara koshish karein")
+            raise HTTPException(429, "Rate limit reached: please wait a moment and try again.")
         return u
+
+    async def current_user(request: Request, x_api_key: str = Header(default=""),
+                           authorization: str = Header(default=""), key: str = "") -> dict:
+        return _resolve(request, _key_from(x_api_key, authorization, key), False)
+
+    async def strict_user(request: Request, x_api_key: str = Header(default=""),
+                          authorization: str = Header(default="")) -> dict:
+        return _resolve(request, _key_from(x_api_key, authorization, ""), True)
+
+    def _owner(u: dict, request: Request, client_id: str) -> str:
+        if u["id"]:
+            return f"u{u['id']}"
+        if client_id and CLIENT_ID.match(client_id):
+            return f"c:{client_id}"
+        return f"ip:{request.client.host if request.client else '?'}"
+
+    def _quota_limit(u: dict) -> int:
+        return int(cfg["chat"]["daily_quota_key" if u["id"] else "daily_quota_anon"])
+
+    def _usage_today(owner: str) -> int:
+        r = db.q("SELECT n FROM usage WHERE owner=? AND day=?", (owner, time.strftime("%Y-%m-%d", time.gmtime())))
+        return r[0][0] if r else 0
+
+    def _charge(u: dict, owner: str) -> None:
+        """Roz ki quota (0 = unlimited). Quota server ko dump hone se bachati hai."""
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        lim = _quota_limit(u)
+        n = _usage_today(owner)
+        if lim and n >= lim:
+            raise HTTPException(429, f"Daily quota ({lim}) used up. Try again tomorrow or use your own free API key.")
+        db.x("INSERT INTO usage(owner,day,n) VALUES(?,?,1) ON CONFLICT(owner,day) DO UPDATE SET n=n+1", (owner, day))
+        if n == 0:  # purane din saaf
+            db.x("DELETE FROM usage WHERE day < date('now','-7 day')")
 
     async def admin_user(u: dict = Depends(current_user)) -> dict:
         if u["role"] != "admin":
@@ -123,7 +202,7 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
                     yield _sse(ev, data)
             except Exception as e:  # noqa: BLE001  brain mein bug ho to bhi user ko saaf jawab, aur log mein record
                 db.log("error", f"answer failed {type(e).__name__}: {e}")
-                yield _sse("token", "Andar koi masla aaya; maine record kar liya hai. Dobara koshish karein.")
+                yield _sse("token", tr("error", q))
                 yield _sse("done", {"mode": "error"})
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
@@ -220,9 +299,182 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     async def admin_heal(a: dict = Depends(admin_user)):
         return {"result": await sup.heal_now()}
 
+    # ---------------------------------------------------------------- chat API
+    @app.get("/api/models")
+    async def api_models():
+        return {"default": "mus-7.01", "models": [m.public() for m in MODELS.values()]}
+
+    @app.post("/api/chat")
+    async def api_chat(body: ChatIn, request: Request, u: dict = Depends(current_user),
+                       x_client_id: str = Header(default="")):
+        owner = _owner(u, request, x_client_id)
+        if not u["id"] and not limiter.allow("chat:" + owner, int(cfg["chat"]["anon_rate_per_min"])):
+            raise HTTPException(429, "Rate limit reached: please wait a moment and try again.")
+        _charge(u, owner)
+
+        async def gen():
+            async for ev, data in chat.stream(owner, u["role"], body.message, body.conversation_id, body.model):
+                yield _sse(ev, data)
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/conversations")
+    async def api_convs(request: Request, u: dict = Depends(current_user), x_client_id: str = Header(default="")):
+        return {"conversations": chat.list_convs(_owner(u, request, x_client_id))}
+
+    @app.get("/api/conversations/{cid}")
+    async def api_conv(cid: str, request: Request, u: dict = Depends(current_user), x_client_id: str = Header(default="")):
+        owner = _owner(u, request, x_client_id)
+        c = chat.get_conv(owner, cid)
+        if not c:
+            raise HTTPException(404, "conversation not found")
+        return {"conversation": c, "messages": chat.messages(cid)}
+
+    @app.delete("/api/conversations/{cid}")
+    async def api_conv_delete(cid: str, request: Request, u: dict = Depends(current_user),
+                              x_client_id: str = Header(default="")):
+        if not chat.delete_conv(_owner(u, request, x_client_id), cid):
+            raise HTTPException(404, "conversation not found")
+        return {"deleted": True}
+
+    @app.post("/api/keys")
+    async def api_make_key(body: KeyIn, request: Request):
+        """Self-serve API key: koi bhi apni key bana kar Talashly ko apni automation/app mein istemal kar sakta hai."""
+        if not cfg["chat"]["signup_enabled"]:
+            raise HTTPException(403, "Key signup is disabled on this server.")
+        ip = request.client.host if request.client else "?"
+        if not limiter.allow("signup:" + ip, int(cfg["chat"]["signup_per_hour_per_ip"]), window=3600.0):
+            raise HTTPException(429, "Too many keys created from this IP in the last hour; try again later.")
+        label = re.sub(r"[^A-Za-z0-9 _.-]", "", body.label).strip()[:24]
+        name = f"{label or 'key'}-{secrets.token_hex(4)}"
+        key = create_user(db, name, "user", int(cfg["chat"]["key_rate_per_min"]))
+        return {"api_key": key, "name": name, "rate_per_min": int(cfg["chat"]["key_rate_per_min"]),
+                "daily_quota": int(cfg["chat"]["daily_quota_key"]) or "unlimited",
+                "note": "This key is shown only once. Save it and do not share it.",
+                "docs": f"{site_url}/api-docs"}
+
+    @app.get("/api/me")
+    async def api_me(request: Request, u: dict = Depends(current_user), x_client_id: str = Header(default="")):
+        owner = _owner(u, request, x_client_id)
+        lim = _quota_limit(u)
+        return {"authenticated": bool(u["id"]), "name": u["name"], "role": u["role"],
+                "rate_per_min": u["rate_per_min"], "used_today": _usage_today(owner),
+                "daily_quota": lim or "unlimited"}
+
+    # ---------------------------------------------------------------- OpenAI-compatible API
+    @app.get("/v1/models")
+    async def v1_models(u: dict = Depends(strict_user)):
+        now = int(time.time())
+        return {"object": "list", "data": [{"id": m.id, "object": "model", "created": now, "owned_by": "talashly"}
+                                           for m in MODELS.values()]}
+
+    @app.post("/v1/chat/completions")
+    async def v1_chat(body: OAIChat, request: Request, u: dict = Depends(strict_user)):
+        model = get_model(body.model, strict=True)
+        if model is None:
+            return _oai_error(404, f"The model '{body.model}' does not exist. See GET /v1/models.", "model_not_found")
+        users = [(m.get("role"), _msg_text(m)) for m in body.messages if isinstance(m, dict)]
+        user_texts = [t for r, t in users if r == "user" and t.strip()]
+        if not user_texts or users[-1][0] != "user":
+            return _oai_error(400, "The last message must have role 'user' and non-empty content.", "invalid_messages")
+        _charge(u, f"u{u['id']}")
+        res = await chat.complete(u["role"], user_texts[-1], model.id, user_texts[-2] if len(user_texts) > 1 else None)
+        if res["error"]:
+            code = res["error"]["code"]
+            return _oai_error(503 if code == "busy" else 400, res["error"]["message"], code,
+                              "server_busy" if code == "busy" else "invalid_request_error")
+        content = format_with_sources(res["text"], res["sources"])
+        cid, created = "chatcmpl-" + secrets.token_hex(12), int(time.time())
+        ptok = sum(len(t.split()) for _, t in users)
+        ctok = len(content.split())
+        extra = {"sources": res["sources"], "mode": res["done"].get("mode")}
+        if not body.stream:
+            return {"id": cid, "object": "chat.completion", "created": created, "model": model.id,
+                    "choices": [{"index": 0, "message": {"role": "assistant", "content": content}, "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": ptok, "completion_tokens": ctok, "total_tokens": ptok + ctok},
+                    "talashly": extra}
+
+        async def gen():
+            def chunk(delta: dict, fin: str | None = None) -> str:
+                return "data: " + json.dumps({"id": cid, "object": "chat.completion.chunk", "created": created,
+                                              "model": model.id, "choices": [{"index": 0, "delta": delta,
+                                                                              "finish_reason": fin}]}, ensure_ascii=False) + "\n\n"
+            yield chunk({"role": "assistant"})
+            for w in re.findall(r"\S+\s*", content):
+                yield chunk({"content": w})
+            yield chunk({}, "stop")
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    # ---------------------------------------------------------------- pages + SEO
+    def page(name: str) -> Response:
+        f = WEB / name
+        if not f.is_file():
+            raise HTTPException(404, "not found")
+        html = f.read_text(encoding="utf-8").replace("{{SITE_URL}}", site_url).replace("{{SITE_NAME}}", site_name)
+        return Response(html, media_type="text/html; charset=utf-8")
+
     @app.get("/")
     async def home():
-        return FileResponse(WEB / "index.html")
+        return page("index.html")
+
+    @app.get("/about")
+    async def about():
+        return page("about.html")
+
+    @app.get("/api-docs")
+    async def api_docs():
+        return page("api.html")
+
+    @app.get("/robots.txt")
+    async def robots():
+        bots = "\n".join(f"User-agent: {b}\nAllow: /\nDisallow: /api/\nDisallow: /admin/\nDisallow: /v1/\n"
+                         for b in ("*", "GPTBot", "ClaudeBot", "PerplexityBot", "Google-Extended", "CCBot"))
+        return PlainTextResponse(f"{bots}\nSitemap: {site_url}/sitemap.xml\n")
+
+    @app.get("/sitemap.xml")
+    async def sitemap():
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        urls = "".join(f"<url><loc>{site_url}{p}</loc><lastmod>{day}</lastmod></url>" for p in ("/", "/about", "/api-docs"))
+        return Response('<?xml version="1.0" encoding="UTF-8"?>'
+                        f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>',
+                        media_type="application/xml")
+
+    @app.get("/llms.txt")
+    async def llms():
+        models = "\n".join(f"- {m.id}: {m.tagline}" for m in MODELS.values())
+        return PlainTextResponse(
+            f"# {site_name}\n\n> {site_name} is an open-source, self-hosted answer engine: its own crawler, its own index, "
+            f"and cited answers in many languages. No third-party search or AI APIs.\n\n"
+            f"## Pages\n- [App]({site_url}/): chat interface\n- [About]({site_url}/about): what it is, FAQ\n"
+            f"- [API docs]({site_url}/api-docs): REST and OpenAI-compatible API\n\n## Models (all free)\n{models}\n\n"
+            f"## Source code\nhttps://github.com/musman550/talashly\n")
+
+    @app.get("/manifest.webmanifest")
+    async def manifest():
+        return JSONResponse({"name": site_name, "short_name": site_name, "start_url": "/", "display": "standalone",
+                             "background_color": "#14130f", "theme_color": "#0f766e",
+                             "icons": [{"src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml"}]})
+
+    if (WEB / "static").is_dir():
+        app.mount("/static", StaticFiles(directory=str(WEB / "static")), name="static")
+
+    if cfg["server"]["cors"]:
+        app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+                           allow_headers=["*"], allow_credentials=False)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        resp = await call_next(request)
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        if "text/html" in resp.headers.get("content-type", ""):
+            resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+            resp.headers.setdefault("Content-Security-Policy",
+                                    "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                                    "connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'")
+        return resp
 
     return app
 

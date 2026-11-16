@@ -57,7 +57,7 @@ def test_grounded_answer_with_citations(env):
 def test_unknown_question_gives_no_fake_answer_and_records_gap(env):
     cfg, db, b = env
     r = run(collect(b, "zzyzx frobnicate wibblewobble"))
-    assert r["sources"] == [] and "nahi" in r["text"].lower()
+    assert r["sources"] == [] and "don't have an answer" in r["text"].lower()
     assert db.q("SELECT n,resolved FROM gaps WHERE q LIKE 'zzyzx%'")[0]["n"] == 1
     run(collect(b, "zzyzx frobnicate wibblewobble"))
     assert db.q("SELECT n FROM gaps WHERE q LIKE 'zzyzx%'")[0]["n"] == 2
@@ -104,7 +104,7 @@ def test_live_research_fetches_missing_topic_then_serves_from_index(tmp_path):
                 await crawler.aclose()
 
         r1, r2, first_hits = run(go())
-        assert any("naye pages" in s for s in r1["steps"]), r1["steps"]
+        assert any("new pages" in s for s in r1["steps"]), r1["steps"]
         assert r1["sources"] and r1["sources"][0]["url"].endswith("/wiki/Quantum_computing")
         assert "qubits" in r1["text"] and "[1]" in r1["text"]
         assert first_hits == 1

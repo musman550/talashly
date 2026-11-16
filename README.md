@@ -1,42 +1,50 @@
-# Talashly v2
+# Talashly
 
-Apna khud ka search engine + RAG + AI-jawab system. Python mein, **koi third-party search/AI API nahi**.
-Apna crawler, apna index (SQLite FTS5), apna "brain". Optional: apna local LLM (llama.cpp server).
+**A free, self-hosted AI answer engine with its own crawler, its own index and cited answers in many languages.**
+No third-party search or AI APIs. Chat UI, five free `MUS 7.01` models, and an OpenAI-compatible API with free keys.
 
-## Windows par chalane ka tareeqa
-1. `INSTALL.bat` (sirf pehli dafa; Python 3.11+ chahiye, "Add to PATH" tick ho)
-2. `START.bat` -> browser mein http://127.0.0.1:8000
-3. Dusre `.bat`: `DOCTOR.bat` (system check), `ADD_USER.bat` (user/API key), `INDEX_CODE.bat` (apna code index),
-   `ASK.bat` (terminal se sawal), `TEST.bat` (tests), `AUTOSTART_ON/OFF.bat` (Windows ke saath auto-start),
-   `RESTORE_BACKUP.bat` (backup se wapas).
+Website: https://musman550.github.io/talashly/ · Hosting guide: [HOSTING.md](HOSTING.md)
 
-## Kya kya hai
-- **Crawler**: robots.txt aur Crawl-delay ka ehtram, per-domain delay, ETag/If-Modified-Since, sitemaps, dedupe,
-  backpressure, timeout, kharab domain ki quarantine, adaptive recrawl. 24/7 ya `config.toml` ke mutabiq.
-- **Index**: SQLite FTS5 (BM25 + taaza content + domain diversity). CJK/Thai ke liye trigram index.
-- **Brain**: sawal ki qism (sawal/code/command) pehchanta hai, bare sawal todta hai, zarurat par live research
-  (seeds + `sources.toml` ke direct sources) karta hai, jo jawab nahi mila usay "gap" mein likhta hai.
-- **RAG jawab**: citations ke saath. Local LLM chalu ho to wo jawab likhta hai aur `ground_check` verify karta hai;
-  warna extractive jawab (sirf index mein mojood text se).
-- **Code search**: `code: fetch_user_profile` — apne folders index karke function/class/identifier search.
-- **Self-healing**: crawler crash par restart (backoff), watchdog, DB integrity check, FTS rebuild, rotating backups,
-  startup par kharab DB ho to latest valid backup se restore.
-- **Multi-user**: hashed API keys, roles, rate limit, background tasks (research/crawl).
-- **Zubanein**: Urdu, Arabic, Hindi, Russian, Chinese, Japanese, Korean, Thai, French, German, Spanish, English
-  (tests mein 11+ zubanon par verify).
+## What you get
+- **Chat website** (Claude-style): streaming answers, citations, conversation history, model picker, dark/light, mobile-ready.
+- **Own crawler**: robots.txt and crawl-delay aware, sitemaps, ETag, dedupe, adaptive recrawl, 24/7 or time windows.
+- **Own index**: SQLite FTS5 (BM25 + freshness + domain diversity) with a trigram index for Chinese/Japanese/Korean/Thai.
+- **Grounded answers**: sentences come from indexed pages and carry `[n]` citations. No evidence means it says so; it never invents.
+- **Models (all free)**: `mus-7.01` (balanced), `-flash` (fastest), `-deep` (multi-step research), `-code` (your code first), `-polyglot` (non-English).
+  These are answer-engine profiles over the same index, not separately trained neural networks. A local LLM (llama.cpp) can be attached to write the text; every sentence is still verified against the sources.
+- **API**: `POST /v1/chat/completions` (OpenAI format, streaming), `GET /v1/models`, `POST /api/keys` (free self-serve keys), plus `/api/search`, `/api/code`, `/api/chat`.
+- **Human-like conversation**: greetings, thanks and "who are you" are answered directly (honestly: it is an AI), follow-ups ("why is that important?") use the previous question, replies match the question's language (English / Roman Urdu / Urdu).
+- **Protection from overload**: per-key rate limits, daily quotas, a concurrency cap with a waiting queue and a clean "server busy" reply.
+- **Self-healing**: crawler supervisor with restarts, DB integrity checks, rotating backups, automatic restore.
+- **SEO / AEO / GEO**: canonical + Open Graph + Twitter tags, JSON-LD (WebApplication, WebSite SearchAction, FAQPage, TechArticle), `robots.txt` (AI crawlers allowed), `sitemap.xml`, `llms.txt`, web manifest.
+- **Code search**: index your own folders and search functions, classes and identifiers.
 
-## Tested numbers (sandbox, 1 machine)
-- 238 automated tests pass (pipeline, languages, crawler, code, brain, healing, API, CLI, DB).
-- 60,000 chunks index: English multi-word search p50 ~85 ms; CJK 4+ chars ~3 ms; 2-char CJK ~70 ms.
-- Local crawl ~89 pages/sec (apni test site par); ~20 MB per 1000 pages.
+## Run on Windows
+1. `INSTALL.bat` once (Python 3.11+, tick "Add to PATH").
+2. `START.bat`, then open http://127.0.0.1:8000
+3. Others: `DOCTOR.bat`, `ADD_USER.bat`, `INDEX_CODE.bat`, `ASK.bat`, `TEST.bat`, `AUTOSTART_ON/OFF.bat`, `RESTORE_BACKUP.bat`.
 
-## Ehtiyaat / honest limits
-- **Google/Bing/DuckDuckGo scrape nahi hote** (unki ToS mana karti hai). Sources apni `seeds.toml` / `sources.toml` hain — unhein badlein.
-- Seeds ke asli URLs sandbox se verify nahi ho sake; pehli dafa `DOCTOR.bat` aur crawl logs dekhein.
-- `.bat` files asli Windows par mujh se test nahi hui (static lint pass hai).
-- JavaScript-rendered sites (Playwright) aur semantic/vector search abhi shamil nahi.
-- "Zero bugs" ka dawa koi nahi kar sakta; tests ne jo bugs pakre wo theek kiye, aur mutation checks se tests ki quwwat parkhi gayi.
-- Crawler sirf wahi data lata hai jo sites public rakhti hain; `/private` jaise disallowed paths kabhi index nahi hote.
+Linux/macOS: `pip install -r requirements.txt && python -m engine serve`. Docker: `docker compose up -d`.
 
-## Docker
-`docker compose up -d` (data `./data` mein; `python -m engine serve --host 0.0.0.0`).
+## Use the API
+```bash
+curl http://127.0.0.1:8000/api/keys -X POST -H "Content-Type: application/json" -d '{"label":"my-app"}'
+curl http://127.0.0.1:8000/v1/chat/completions -H "Authorization: Bearer YOUR_KEY" -H "Content-Type: application/json" \
+  -d '{"model":"mus-7.01","messages":[{"role":"user","content":"What is a polite crawler?"}]}'
+```
+Works with the OpenAI SDK (`base_url="http://127.0.0.1:8000/v1"`) and no-code tools that accept a custom OpenAI base URL.
+
+## Tested (in a sandbox, one machine)
+- 300+ automated tests: crawler, languages (11+), code search, brain, self-healing, API, chat, OpenAI endpoint, quotas, concurrency, SEO files, and a real-Chromium end-to-end UI suite (needs Playwright; skipped otherwise). Mutation checks confirm the tests catch broken logic.
+- Chat load test, 400 requests with 80 at once on one process: all answered, ~100 requests/s, p95 about 0.9 s.
+- Search over 60,000 chunks: English p50 ~85 ms, CJK 4+ chars ~3 ms.
+
+## Honest limits
+- No one can promise "zero bugs" or never-wrong answers. The design prevents invention (answers only from sources, citations, "no answer" when evidence is missing), but sources themselves can be wrong or outdated.
+- It does **not** scrape Google, Bing or DuckDuckGo (their terms forbid it). Choose sources in `seeds.toml` / `sources.toml`; seed URLs could not be verified from the build sandbox.
+- JavaScript-rendered sites and semantic/vector search are not included yet.
+- `.bat` launchers were not run on a real Windows machine (lint-tested only).
+- GitHub Pages cannot run the Python server; see [HOSTING.md](HOSTING.md) for free ways to put the app online.
+- SEO files and structured data follow best practice, but no one can guarantee search rankings.
+
+License: MIT.

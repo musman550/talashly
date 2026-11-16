@@ -103,6 +103,19 @@ CREATE TABLE IF NOT EXISTS code_chunks(
     text TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_code_path ON code_chunks(path);
+CREATE TABLE IF NOT EXISTS conversations(
+    id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', model TEXT NOT NULL,
+    created REAL NOT NULL, updated REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conv_owner ON conversations(owner, updated);
+CREATE TABLE IF NOT EXISTS messages(
+    id INTEGER PRIMARY KEY AUTOINCREMENT, conv_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    role TEXT NOT NULL, content TEXT NOT NULL, meta TEXT, created REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conv_id, id);
+CREATE TABLE IF NOT EXISTS usage(
+    owner TEXT NOT NULL, day TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(owner, day)
+);
 CREATE VIRTUAL TABLE IF NOT EXISTS code_fts USING fts5(text, symbols, tokenize="unicode61 tokenchars '_'");
 """
 

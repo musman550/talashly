@@ -19,7 +19,13 @@ DEFAULTS: dict[str, Any] = {
     "recrawl": {"news_minutes": 30, "default_hours": 24, "max_hours": 168},
     "search": {"default_limit": 8, "recency_half_life_days": 30},
     "llm": {"enabled": False, "base_url": "http://127.0.0.1:8081"},
-    "server": {"host": "127.0.0.1", "port": 8000, "require_key": False, "workers": 2, "rate_per_min": 60},
+    "server": {"host": "127.0.0.1", "port": 8000, "require_key": False, "workers": 2, "rate_per_min": 60,
+               "cors": True},
+    "site": {"name": "Talashly", "url": "http://127.0.0.1:8000"},
+    # chat: max_concurrent = ek waqt mein kitne jawab ban sakte hain; queue_max = intezar mein kitne; 0 quota = unlimited
+    "chat": {"max_concurrent": 16, "queue_max": 200, "max_message_chars": 4000, "max_convs_per_owner": 100,
+             "max_msgs_per_conv": 400, "anon_rate_per_min": 20, "key_rate_per_min": 60, "daily_quota_anon": 200,
+             "daily_quota_key": 5000, "signup_enabled": True, "signup_per_hour_per_ip": 5},
     "brain": {
         "live_research": True, "live_timeout_s": 12, "live_fetch_max": 6, "weak_coverage": 0.6,
         "auto_expand": True, "expand_votes": 5, "max_domains": 300, "gap_retries": 3,
@@ -35,6 +41,11 @@ LIMITS = {
     ("server", "port"): (1, 65535), ("server", "workers"): (1, 16),
     ("brain", "live_timeout_s"): (2, 60), ("brain", "live_fetch_max"): (0, 20),
     ("brain", "weak_coverage"): (0.1, 1.0),
+    ("chat", "max_concurrent"): (1, 256), ("chat", "queue_max"): (0, 10000), ("chat", "max_message_chars"): (50, 20000),
+    ("chat", "anon_rate_per_min"): (1, 100000), ("chat", "key_rate_per_min"): (1, 100000),
+    ("chat", "daily_quota_anon"): (0, 10_000_000), ("chat", "daily_quota_key"): (0, 10_000_000),
+    ("chat", "signup_per_hour_per_ip"): (1, 10000), ("chat", "max_convs_per_owner"): (1, 10000),
+    ("chat", "max_msgs_per_conv"): (2, 100000),
 }
 
 
@@ -77,6 +88,8 @@ def load_config(path: str | None = None) -> dict[str, Any]:
         except tomllib.TOMLDecodeError as e:  # file kharab: defaults par chalo, system na rukay
             problem = f"config.toml parse error ({e}); defaults use ho rahe hain"
     cfg = _merge(DEFAULTS, user)
+    if os.environ.get("SS_SITE_URL", "").startswith(("http://", "https://")):  # hosting par public address env se
+        cfg["site"]["url"] = os.environ["SS_SITE_URL"].strip()
     cfg["_problems"] = ([problem] if problem else []) + validate(cfg)
     db = Path(cfg["general"]["db_path"])
     if not db.is_absolute():

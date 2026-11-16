@@ -86,7 +86,7 @@ def test_brain_exception_is_contained_and_logged(tmp_path, monkeypatch):
         r = c.get("/api/answer", params={"q": "anything"})
         assert r.status_code == 200
         ev = parse_sse(r.text)
-        assert ev[-1] == ("done", {"mode": "error"}) and "masla" in "".join(d for n, d in ev if n == "token")
+        assert ev[-1] == ("done", {"mode": "error"}) and "went wrong" in "".join(d for n, d in ev if n == "token")
         assert c.get("/api/health").status_code == 200       # server zinda
     assert DB(cfg["general"]["db_path"]).q("SELECT 1 FROM brain_log WHERE kind='error' AND detail LIKE '%brain bug%'")
 

@@ -14,6 +14,7 @@ from typing import Any, AsyncIterator, Callable
 from urllib.parse import quote, quote_plus
 
 from .codeindex import index_paths
+from .lang import tr
 from .db import DB, domain_of, normalize_url
 from .extract import extract_links, weight
 from .llm import llm_alive, stream_local_llm
@@ -312,8 +313,9 @@ class Brain:
                 "snippet": snippet(h.passages[0], ts), "published_at": h.published_at,
                 "fetched_at": h.fetched_at, "score": round(h.score, 3)}
 
-    async def run(self, q: str, role: str = "user", deep: bool = False,
-                  stream_delay: float = 0.012) -> AsyncIterator[tuple[str, Any]]:
+    async def run(self, q: str, role: str = "user", deep: bool = False, stream_delay: float = 0.012,
+                  live: bool | None = None, sentences: int | None = None, nsources: int | None = None,
+                  weak_cov: float | None = None) -> AsyncIterator[tuple[str, Any]]:
         t0 = time.time()
         q = re.sub(r"\s+", " ", q).strip()[:500]
         intent = self.classify(q, role == "admin")
@@ -334,11 +336,10 @@ class Brain:
                 yield "code", [{"path": c.path, "lang": c.lang, "start": c.start, "end": c.end,
                                 "text": "\n".join(c.text.splitlines()[:25]), "score": round(c.score, 3)} for c in ch[:8]]
                 best = ch[0]
-                yield "token", (f"Code index mein {len(ch)} jagah mila. Sab se behtar: {best.path} "
-                                f"(lines {best.start}-{best.end}, {best.lang}).")
+                yield "token", tr("code_found", q, n=len(ch), path=best.path, a=best.start, b=best.end, lang=best.lang)
                 yield "done", {"mode": "code", "took_ms": round((time.time() - t0) * 1000)}
                 return
-            yield "step", {"msg": "Local code index mein nahi mila; web docs mein dekh raha hoon."}
+            yield "step", {"msg": tr("code_miss", q)}
             q = cq
 
         subs = self.decompose(q, deep)
@@ -348,27 +349,27 @@ class Brain:
         limit = 10 if deep else 8
         hits = self.searcher.search_many(subs, limit)
         cov = coverage(q, hits)
-        weak = cov < (0.9 if deep else self.b["weak_coverage"])
+        weak = cov < (weak_cov if weak_cov is not None else (0.9 if deep else self.b["weak_coverage"]))
+        live_ok = self.b["live_research"] if live is None else (live and self.b["live_research"])
 
-        if weak and self.b["live_research"]:
-            yield "step", {"msg": "Index mein jawab kamzor hai, live sources se la raha hoon…"}
+        if weak and live_ok:
+            yield "step", {"msg": tr("weak", q)}
             lr = await self.live_research(q)
             if lr["indexed"]:
-                yield "step", {"msg": f"{lr['indexed']} naye pages mile aur index ho gaye."}
+                yield "step", {"msg": tr("live_ok", q, n=lr["indexed"])}
                 hits = self.searcher.search_many(subs, limit)
                 cov = coverage(q, hits)
         if not hits or cov < self.b["weak_coverage"]:
             self.record_gap(q)  # system isay yaad rakhta hai aur background mein dobara koshish karega
 
-        yield "sources", [self._hit_json(h, ts, i) for i, h in enumerate(hits[: (10 if deep else 6)], 1)]
+        yield "sources", [self._hit_json(h, ts, i) for i, h in enumerate(hits[: (nsources or (10 if deep else 6))], 1)]
         if not hits:
-            yield "token", ("Mere index mein is sawal ka jawab abhi nahi hai. Maine ise note kar liya hai; "
-                            "crawler naya content layega to khud dobara koshish karunga.")
+            yield "token", tr("none", q)
             yield "done", {"mode": "none", "coverage": 0, "took_ms": round((time.time() - t0) * 1000)}
             return
 
         mode = "extractive"
-        ans = build_answer(q, hits, 8 if deep else 5)
+        ans = build_answer(q, hits, sentences or (8 if deep else 5))
         use_llm = self.cfg["llm"]["enabled"] and await llm_alive(self.cfg["llm"]["base_url"])
         if use_llm:
             buf: list[str] = []
@@ -391,7 +392,7 @@ class Brain:
                 if buf:
                     yield "replace", ""
         if not ans["answer"]:
-            yield "token", "Sources mile hain (neeche dekhein) lekin un mein seedha jawab wala jumla nahi mila."
+            yield "token", tr("nosent", q)
         else:
             for word in ans["answer"].split(" "):
                 yield "token", word + " "

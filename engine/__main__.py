@@ -70,7 +70,8 @@ def cmd_serve(a) -> int:
     cfg = load_config()
     preflight_db(cfg)
     host = a.host or cfg["server"]["host"]
-    port = a.port or int(cfg["server"]["port"])
+    env_port = os.environ.get("PORT", "")  # Render/Railway/HF jaise hosts PORT dete hain
+    port = a.port or (int(env_port) if env_port.isdigit() and 0 < int(env_port) < 65536 else int(cfg["server"]["port"]))
     if not _port_free(host, port):
         print(f"[X] Port {port} pehle se istemal mein hai. config.toml mein [server] port badlein ya dusra program band karein.")
         return 2
@@ -95,7 +96,9 @@ def cmd_serve(a) -> int:
 
         threading.Thread(target=_open_when_ready, daemon=True).start()
     print(f"Talashly chal raha hai: http://{'localhost' if host in ('0.0.0.0', '127.0.0.1') else host}:{port}")
-    uvicorn.run("engine.server:create_app", factory=True, host=host, port=port, log_level="warning")
+    proxy = os.environ.get("SS_TRUST_PROXY", "0") == "1"  # sirf tab on karein jab hosting proxy ke peeche hon
+    uvicorn.run("engine.server:create_app", factory=True, host=host, port=port, log_level="warning",
+                proxy_headers=proxy, forwarded_allow_ips="*" if proxy else None)
     return 0
 
 

@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Talashly - self-hosted search engine with RAG answers</title>
 <meta name="description" content="Talashly is an open-source, self-hosted search engine with its own crawler, index and cited AI answers. Python. No third-party APIs. Multilingual.">
+<link rel="canonical" href="https://musman550.github.io/talashly/">
+<meta property="og:type" content="website"><meta property="og:title" content="Talashly - free open-source AI answer engine"><meta property="og:description" content="Own crawler, own index, cited answers in many languages. Free chat and OpenAI-compatible API."><meta property="og:url" content="https://musman550.github.io/talashly/">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareSourceCode","name":"Talashly","codeRepository":"https://github.com/musman550/talashly","programmingLanguage":"Python","license":"https://opensource.org/licenses/MIT","description":"Self-hosted open-source search engine and AI answer engine with its own crawler, index and cited answers."}</script>
 <style>
 :root{--bg:#fbfaf7;--fg:#1c1b18;--mut:#6b675e;--card:#fff;--line:#e5e1d6;--ac:#0f766e}
 @media(prefers-color-scheme:dark){:root{--bg:#14130f;--fg:#f1eee6;--mut:#a29d90;--card:#1d1b16;--line:#2e2b24;--ac:#2dd4bf}}
@@ -36,6 +40,8 @@ footer{padding:32px 0 56px;color:var(--mut);font-size:.9rem}a{color:var(--ac)}
 <div class="c"><h3>Self-healing</h3><p>Crawler restarts, integrity checks, rotating backups and automatic restore.</p></div>
 <div class="c"><h3>Multi-user</h3><p>API keys, roles, rate limits and background tasks.</p></div>
 </div>
+<h2>Free models and API</h2>
+<p>Five free <code>MUS 7.01</code> profiles (balanced, flash, deep, code, polyglot) and an OpenAI-compatible API with free self-serve keys. Answers carry citations, and when the sources do not contain an answer Talashly says so.</p>
 <h2 id="start">Quick start</h2>
 <p><b>Windows:</b> run <code>INSTALL.bat</code> once, then <code>START.bat</code> and open <code>http://127.0.0.1:8000</code>.</p>
 <pre>git clone https://github.com/musman550/talashly
@@ -44,7 +50,8 @@ pip install -r requirements.txt
 python -m engine serve</pre>
 <h2>Good to know</h2>
 <ul>
-<li>This page is only a project site. The search engine runs on your own computer or server, not on GitHub Pages.</li>
+<li>This page is only the project site. To put the chat app online for everyone, follow <a href="https://github.com/musman550/talashly/blob/main/HOSTING.md">HOSTING.md</a>.</li>
+
 <li>It does not scrape Google, Bing or DuckDuckGo. You choose the sources in <code>seeds.toml</code>.</li>
 <li>JavaScript-rendered sites and vector search are not included yet.</li>
 </ul>

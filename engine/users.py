@@ -56,15 +56,15 @@ class RateLimiter:
     def __init__(self) -> None:
         self.hits: dict[str, deque] = defaultdict(deque)
 
-    def allow(self, ident: str, per_min: int) -> bool:
+    def allow(self, ident: str, per_min: int, window: float = 60.0) -> bool:
         now = time.time()
         dq = self.hits[ident]
-        while dq and now - dq[0] > 60:
+        while dq and now - dq[0] > window:
             dq.popleft()
         if len(dq) >= per_min:
             return False
         dq.append(now)
         if len(self.hits) > 20000:  # memory leak se bachao
-            for k in [k for k, v in self.hits.items() if not v or now - v[-1] > 120][:10000]:
+            for k in [k for k, v in self.hits.items() if not v or now - v[-1] > max(120.0, window)][:10000]:
                 self.hits.pop(k, None)
         return True

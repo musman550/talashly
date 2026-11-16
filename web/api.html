@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Talashly API docs - OpenAI-compatible, free API key</title>
+<meta name="description" content="Use Talashly from any app or automation: free API keys, an OpenAI-compatible /v1/chat/completions endpoint, streaming, and search endpoints.">
+<meta name="theme-color" content="#0f766e">
+<link rel="canonical" href="{{SITE_URL}}/api-docs">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/page.css">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="{{SITE_NAME}}">
+<meta property="og:title" content="Talashly API docs - OpenAI-compatible, free API key">
+<meta property="og:description" content="Use Talashly from any app or automation: free API keys, an OpenAI-compatible /v1/chat/completions endpoint, streaming, and search endpoints.">
+<meta property="og:url" content="{{SITE_URL}}/api-docs">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Talashly API docs - OpenAI-compatible, free API key">
+<meta name="twitter:description" content="Use Talashly from any app or automation: free API keys, an OpenAI-compatible /v1/chat/completions endpoint, streaming, and search endpoints.">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "TechArticle", "headline": "Talashly API documentation", "description": "OpenAI-compatible chat completions, free API keys, streaming and search endpoints.", "mainEntityOfPage": "{{SITE_URL}}/api-docs", "author": {"@type": "Organization", "name": "{{SITE_NAME}}"}}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "name": "{{SITE_NAME}}", "item": "{{SITE_URL}}/"}, {"@type": "ListItem", "position": 2, "name": "API docs", "item": "{{SITE_URL}}/api-docs"}]}</script>
+</head>
+<body><div class="w">
+<nav class="top" aria-label="Main"><a class="b" href="/">{{SITE_NAME}}</a><a href="/">Chat</a><a href="/about">About</a><a href="/api-docs" class="on">API</a><a href="https://github.com/musman550/talashly" rel="noopener">GitHub</a></nav>
+<main>
+<h1>Talashly API</h1>
+<p class="lead">Use Talashly from your own apps and automations. It speaks the OpenAI chat-completions format, so most tools work by changing the base URL.</p>
+<h2>1. Get a free key</h2>
+<p>Click <b>API key</b> in the chat, or call:</p>
+<pre><code>curl -X POST {{SITE_URL}}/api/keys -H &quot;Content-Type: application/json&quot; -d &#x27;{&quot;label&quot;:&quot;my-app&quot;}&#x27;</code></pre>
+<p>The key (starts with <code>ss_</code>) is shown once. Keep it secret.</p>
+<h2>2. Call the chat endpoint</h2>
+<p>Base URL: <code>{{SITE_URL}}/v1</code>. Send the key as <code>Authorization: Bearer KEY</code> (or <code>X-Api-Key</code>).</p>
+<h3>curl</h3><pre><code>curl {{SITE_URL}}/v1/chat/completions \
+  -H &quot;Authorization: Bearer YOUR_KEY&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#x27;{&quot;model&quot;:&quot;mus-7.01&quot;,&quot;messages&quot;:[{&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;What is a polite crawler?&quot;}]}&#x27;</code></pre>
+<h3>Python (OpenAI SDK)</h3><pre><code>from openai import OpenAI
+
+client = OpenAI(base_url=&quot;{{SITE_URL}}/v1&quot;, api_key=&quot;YOUR_KEY&quot;)
+r = client.chat.completions.create(
+    model=&quot;mus-7.01&quot;,
+    messages=[{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;What is a polite crawler?&quot;}],
+)
+print(r.choices[0].message.content)</code></pre>
+<h3>JavaScript</h3><pre><code>const r = await fetch(&quot;{{SITE_URL}}/v1/chat/completions&quot;, {
+  method: &quot;POST&quot;,
+  headers: { &quot;Authorization&quot;: &quot;Bearer YOUR_KEY&quot;, &quot;Content-Type&quot;: &quot;application/json&quot; },
+  body: JSON.stringify({ model: &quot;mus-7.01&quot;, messages: [{ role: &quot;user&quot;, content: &quot;What is a polite crawler?&quot; }] }),
+});
+console.log((await r.json()).choices[0].message.content);</code></pre>
+<p>Add <code>"stream": true</code> for server-sent events. Any no-code tool that accepts a custom OpenAI base URL (n8n, Make, Flowise and others) can use the same URL and key.</p>
+<h2>Endpoints</h2>
+<table><thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead><tbody>
+<tr><td>GET</td><td><code>/v1/models</code></td><td>List the free models</td></tr>
+<tr><td>POST</td><td><code>/v1/chat/completions</code></td><td>Cited answer; OpenAI format; response has a <code>talashly.sources</code> field</td></tr>
+<tr><td>GET</td><td><code>/api/search?q=</code></td><td>Plain search results with snippets</td></tr>
+<tr><td>GET</td><td><code>/api/code?q=</code></td><td>Search code indexed by the server owner</td></tr>
+<tr><td>POST</td><td><code>/api/chat</code></td><td>Chat with saved conversations (server-sent events)</td></tr>
+<tr><td>POST</td><td><code>/api/keys</code></td><td>Create a free API key</td></tr>
+<tr><td>GET</td><td><code>/api/me</code></td><td>Your key's usage today and limits</td></tr>
+<tr><td>GET</td><td><code>/api/health</code></td><td>Server and index status</td></tr>
+</tbody></table>
+<h2>Models</h2>
+<table><thead><tr><th>Model</th><th>Best for</th></tr></thead><tbody><tr><td><code>mus-7.01</code></td><td>Balanced - roz ke sawalon ke liye</td></tr><tr><td><code>mus-7.01-flash</code></td><td>Sab se tez</td></tr><tr><td><code>mus-7.01-deep</code></td><td>Gehri research</td></tr><tr><td><code>mus-7.01-code</code></td><td>Coding madad</td></tr><tr><td><code>mus-7.01-polyglot</code></td><td>Har zaban ke liye</td></tr></tbody></table>
+<h2>Limits and errors</h2>
+<p>Each key has a per-minute rate limit and a daily quota so that one user cannot overload the server. Errors use the OpenAI shape: <code>{"error":{"message":"...","type":"...","code":"..."}}</code>. Status <code>401</code> bad or missing key, <code>404</code> unknown model, <code>429</code> rate limit or quota, <code>503</code> server busy (retry shortly).</p>
+<p>Token counts in <code>usage</code> are approximate word counts. The answer always ends with a <code>Sources:</code> list.</p>
+<footer>Talashly is open source (MIT). Answers can be wrong: check the cited sources.</footer>
+</main></div></body></html>

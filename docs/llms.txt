@@ -1,0 +1,6 @@
+# Talashly
+
+> Free, open-source, self-hosted AI answer engine with its own crawler, index and cited answers. Chat UI, five free MUS 7.01 models, OpenAI-compatible API.
+
+- [Source code](https://github.com/musman550/talashly)
+- [Hosting guide](https://github.com/musman550/talashly/blob/main/HOSTING.md)
