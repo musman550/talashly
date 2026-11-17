@@ -185,7 +185,7 @@ def test_stop_button_aborts_cleanly(server, page):
     try:
         page.goto(url)
         page.wait_for_selector("#model option", state="attached")
-        page.fill("#in", "polite crawler")
+        page.fill("#in", "polite crawler stopbutton check")  # alag sawal: cache se foran jawab na aaye
         page.click("#send")
         page.wait_for_selector("#send:has-text('Stop')")
         page.wait_for_selector(".msg.bot .body p")
