@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Alag machine (Azure/AWS/Oracle A1, Ubuntu, 3 GB+ RAM) par apna open-source AI server chalao: koi third-party API nahi.
+# Alag machine (AWS 4 GB / Oracle A1, Ubuntu, 3 GB+ RAM; Azure free VMs are only 1 GB: not enough) par apna open-source AI server chalao: koi third-party API nahi.
 # Isay AI wali machine par chalayein: bash llm-node-setup.sh
 # Ye ek lamba API-key khud banata hai (sirf aap ki Talashly VM ko pata hona chahiye) aur aakhir mein connect wali command chhapta hai.
 set -euo pipefail

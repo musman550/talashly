@@ -56,7 +56,7 @@ On the VM: `bash ~/talashly/deploy/enable-llm.sh`. The script refuses on 1 GB Mi
 
 ## AI on a separate machine (split architecture, no third-party AI)
 - Website + search + crawler stay on the Oracle VM. The open-source AI (Qwen3 1.7B via llama.cpp) runs on a *second* machine with 3 GB+ RAM
-  (for example Azure B2pts v2 free for 12 months, or an AWS Free-plan instance).
+  (for example an AWS Free-plan instance with 4 GB, or Oracle A1). Azure's free VMs are only ~1 GB (B2pts v2 = 1 GiB) and are not enough.
 - On the AI machine: `bash deploy/llm-node-setup.sh` (creates a random API key, starts llama.cpp, prints the connect command).
 - On the Talashly VM: `bash deploy/connect-llm.sh http://AI-IP:8081 KEY`.
 - Open TCP 8081 on the AI machine's cloud firewall only for the Talashly VM's IP. Traffic is plain HTTP, so the IP allow-list is the protection.
