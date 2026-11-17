@@ -63,6 +63,12 @@ class ChatIn(BaseModel):
     history: list[HistMsg] | None = Field(default=None, max_length=12)  # private mode mein browser bhejta hai
 
 
+class FeedbackIn(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    answer: str = Field(default="", max_length=4000)
+    vote: str = Field(pattern="^(up|down)$")
+
+
 class KeyIn(BaseModel):
     label: str = Field(default="", max_length=40)
 
@@ -328,6 +334,14 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
+    @app.post("/api/feedback")
+    async def api_feedback(body: FeedbackIn, request: Request, u: dict = Depends(current_user),
+                           x_client_id: str = Header(default="")):
+        owner = _owner(u, request, x_client_id)
+        if not limiter.allow("fb:" + owner, 20):
+            raise HTTPException(429, "Too many feedback clicks: please wait a moment.")
+        return {"result": chat.feedback(owner, body.question, body.answer, body.vote)}
+
     @app.get("/api/conversations")
     async def api_convs(request: Request, u: dict = Depends(current_user), x_client_id: str = Header(default="")):
         return {"conversations": chat.list_convs(_owner(u, request, x_client_id))}
@@ -478,6 +492,8 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     async def security_headers(request: Request, call_next):
         resp = await call_next(request)
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        if request.url.path.startswith("/static/"):  # CDN/browser cache: page tezi se khulta hai (Micro VM par load kam)
+            resp.headers["Cache-Control"] = "public, max-age=3600, s-maxage=86400"
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         if "text/html" in resp.headers.get("content-type", ""):
             resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")

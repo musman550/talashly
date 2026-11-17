@@ -115,12 +115,21 @@
     b.foot.textContent = "";
     const bits = [];
     if (done && done.model) bits.push(done.model);
-    if (done && done.mode && done.mode !== "chat") bits.push(done.mode);
     if (done && done.took_ms != null) bits.push(done.took_ms + " ms");
     if (bits.length) b.foot.appendChild(el("span", null, bits.join(" · ")));
     const copy = el("button", null, "Copy"); copy.type = "button";
     copy.onclick = async () => { try { await navigator.clipboard.writeText(b.text); copy.textContent = "Copied"; } catch (e) { copy.textContent = "Copy failed"; } };
     b.foot.appendChild(copy);
+    if (b.q && done && ["extractive", "llm-direct", "llm", "builder", "learned"].includes(done.mode) && b.text) {
+      ["up", "down"].forEach((v) => {
+        const btn = el("button", null, v === "up" ? "\u{1F44D}" : "\u{1F44E}"); btn.type = "button"; btn.title = v === "up" ? "Good answer" : "Not helpful";
+        btn.onclick = async () => {
+          try { await fetch("/api/feedback", { method: "POST", headers: headers(true), body: JSON.stringify({ question: b.q, answer: b.text.slice(0, 3000), vote: v }) }); } catch (e) { /* ignore */ }
+          b.foot.querySelectorAll(".fb").forEach((x) => x.remove()); b.foot.appendChild(el("span", "fb", "Thanks!"));
+        };
+        btn.classList.add("fb"); b.foot.appendChild(btn);
+      });
+    }
     if (retryText) { const r = el("button", null, "Retry"); r.type = "button"; r.onclick = () => send(retryText); b.foot.appendChild(r); }
   }
 
@@ -131,7 +140,7 @@
     S.busy = true; S.stick = true; S.lastText = text;
     $("send").textContent = "Stop"; $("send").type = "button";
     addUser(text);
-    const b = addBot();
+    const b = addBot(); b.q = text;
     const ctl = new AbortController(); S.ctl = ctl;
     let done = null, failed = false, stopped = false;
     try {

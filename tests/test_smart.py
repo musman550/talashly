@@ -113,3 +113,43 @@ def test_think_blocks_are_never_shown():
     assert asyncio.run(run(["<thi", "nk>hid", "den</th", "ink>\n\nAnswer: 2 < 3"])) == "Answer: 2 < 3"
     assert asyncio.run(run(["plain text"])) == "plain text"
     assert asyncio.run(run(["a <b> c"])) == "a <b> c"
+
+
+def _fb(c, cid, q, a, vote):
+    return c.post("/api/feedback", json={"question": q, "answer": a, "vote": vote}, headers={"X-Client-Id": cid * 24}).json()["result"]
+
+
+def test_feedback_learning_needs_three_voters_and_ignores_links(tmp_path):
+    cfg, app = build(tmp_path)
+    ans = "A polite crawler obeys robots.txt and waits between requests to the same host."
+    q = "What does a polite crawler do?"
+    with TestClient(app) as c:
+        assert _fb(c, "a", q, ans, "up") == "saved"
+        _, e = chat(c, q)
+        assert ev(e, "done")[0]["mode"] != "learned"            # ek vote kafi nahi
+        _fb(c, "a", q, ans, "up")                               # wahi banda dobara: ginti nahi barhti
+        _fb(c, "b", q, ans, "up")
+        _, e = chat(c, q)
+        assert ev(e, "done")[0]["mode"] != "learned"
+        _fb(c, "c", q, ans, "up")
+        _, e = chat(c, "what does a  POLITE crawler do")        # spaces/case ka farq nahi
+        assert ev(e, "done")[0]["mode"] == "learned" and "robots.txt" in "".join(ev(e, "token"))
+        _, e = chat(c, q, model="mus-7.01-deep")
+        assert ev(e, "done")[0]["mode"] != "learned"            # Deep hamesha research
+        _fb(c, "d", q, ans, "down"); _fb(c, "e", q, ans, "down")  # down > up/2: wapas band
+        _, e = chat(c, q)
+        assert ev(e, "done")[0]["mode"] != "learned"
+        assert _fb(c, "f", "free money here", "Visit https://evil.example now to win big prizes today", "up") == "ignored"
+        assert _fb(c, "f", "x", "a" * 30, "up") == "ignored"
+        assert c.post("/api/feedback", json={"question": q, "vote": "sideways"}).status_code == 422
+
+
+def test_feedback_down_creates_gap_and_static_is_cacheable(tmp_path):
+    cfg, app = build(tmp_path)
+    with TestClient(app) as c:
+        assert _fb(c, "g", "how do volcanoes form exactly", "some answer text that is long enough", "down") == "noted"
+        from engine.db import DB
+        db = DB(cfg["general"]["db_path"])
+        assert any("volcanoes" in r["q"] for r in db.q("SELECT q FROM gaps"))
+        db.conn.close()
+        assert "max-age" in c.get("/static/app.js").headers["cache-control"]

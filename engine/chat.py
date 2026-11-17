@@ -133,6 +133,14 @@ SYSTEM_PROMPT = (
 )
 
 
+def qkey(text: str) -> str:
+    """Sawal ki pehchaan: chhote huroof, sirf alfaaz (spaces/punctuation ka farq nahi)."""
+    return " ".join(re.findall(r"\w+", text.lower()))[:200]
+
+
+LEARN_MIN_VOTERS = 3  # itne alag log 👍 den tab hi jawab "seekha hua" mana jata hai (ek akela bigaar na sake)
+
+
 class Chat:
     def __init__(self, cfg: dict, db: DB, brain: Brain, searcher: Searcher):
         self.cfg, self.db, self.brain, self.searcher = cfg, db, brain, searcher
@@ -327,9 +335,44 @@ class Chat:
                     pass
             self._release()
 
+    def learned_answer(self, text: str) -> str | None:
+        k = qkey(text)
+        if len(k) < 4:
+            return None
+        r = self.db.q("SELECT a FROM learned WHERE qkey=?", (k,))
+        if not r:
+            return None
+        v = self.db.q("SELECT SUM(vote=1) up, SUM(vote=-1) down FROM learned_votes WHERE qkey=?", (k,))[0]
+        up, down = int(v["up"] or 0), int(v["down"] or 0)
+        return r[0]["a"] if up >= LEARN_MIN_VOTERS and up > 2 * down else None
+
+    def feedback(self, owner: str, question: str, answer: str, vote: str) -> str:
+        """👍/👎: sirf user ke click par, bina pehchaan ke. 👍 jawab yaad karta hai, 👎 sawal ko dobara research ke liye gap banata hai."""
+        k = qkey(question)
+        if len(k) < 4:
+            return "ignored"
+        voter = uuid.uuid5(uuid.NAMESPACE_URL, owner).hex
+        if vote == "up":
+            a = answer.strip()
+            if not (20 <= len(a) <= 3000) or "http://" in a or "https://" in a:
+                return "ignored"
+            self.db.x("INSERT INTO learned(qkey,q,a,ts) VALUES(?,?,?,?) ON CONFLICT(qkey) DO UPDATE SET a=excluded.a, ts=excluded.ts",
+                      (k, question.strip()[:300], a, time.time()))
+            self.db.x("INSERT OR REPLACE INTO learned_votes(qkey,voter,vote) VALUES(?,?,1)", (k, voter))
+            return "saved"
+        self.db.x("INSERT OR REPLACE INTO learned_votes(qkey,voter,vote) VALUES(?,?,-1)", (k, voter))
+        self.brain.record_gap(question.strip()[:300])
+        return "noted"
+
     async def _smart(self, text: str, history: list[dict] | None, prev_user: str | None, model: Model) -> AsyncIterator[tuple[str, Any]]:
         """Insani dimaag: pehle samjho user kya chahta hai. Website/kaam ke sawal seedha banao; AI writer (LLM) on ho aur
         index kamzor ho to usi se jawab. Kuch na bane to kuch yield nahi karta aur normal (index wala) rasta chalta hai."""
+        if not model.deep:
+            got = self.learned_answer(text)
+            if got:  # users ke 👍 se seekha hua jawab: milliseconds mein
+                yield "token", got
+                yield "done", {"mode": "learned"}
+                return
         llm = self.cfg["llm"]
         ready = bool(llm.get("enabled"))
         site = wants_site(text)
