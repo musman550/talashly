@@ -53,3 +53,19 @@ def is_unclear(text: str) -> bool:
     if s.isascii() and len(s) < 3:
         return True
     return bool(re.fullmatch(r"(.)\1{3,}", s))
+
+
+TASK = re.compile(
+    r"^\s*(please |pls |can you |could you |kindly |mujhe |mujy |)?(write|draft|compose|create|make|build|generate|design|"
+    r"translate|summari[sz]e|rewrite|fix|debug|code|explain|plan|list|give me|suggest|help me|show me|banao|bana|likho|likh|"
+    r"samjhao|batao)\b", re.I)
+WEB_Q = re.compile(r"\b(latest|news|today|current|price|weather|score|who is|what is|when did|where is|how many|define|meaning)\b", re.I)
+
+
+def intent(text: str) -> str:
+    """'task' (kuch banana/likhna), warna 'question'. Website ka alag builder hai (builder.wants_site)."""
+    if TASK.search(text) and not WEB_Q.search(text):
+        return "task"
+    return "question"
+
+CREATIVE = re.compile(r"^\s*(please |pls |can you |could you |kindly |)?(write|draft|compose|create|generate|translate|rewrite|fix|debug|code|likho|likh)\b", re.I)

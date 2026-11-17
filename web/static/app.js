@@ -6,7 +6,7 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } },
   };
-  const S = { models: [], model: "mus-7.01", conv: null, convs: [], ctl: null, busy: false, stick: true, lastText: "" };
+  const S = { models: [], model: "mus-7.01", conv: null, convs: [], ctl: null, busy: false, stick: true, lastText: "", priv: false, hist: [] };
 
   function clientId() {
     let id = store.get("tl_cid");
@@ -136,7 +136,7 @@
     let done = null, failed = false, stopped = false;
     try {
       const r = await fetch("/api/chat", { method: "POST", headers: headers(true), signal: ctl.signal,
-        body: JSON.stringify({ message: text, conversation_id: S.conv, model: S.model }) });
+        body: JSON.stringify({ message: text, conversation_id: S.priv ? null : S.conv, model: S.model, private: S.priv, history: S.priv ? S.hist.slice(-8) : undefined }) });
       if (!r.ok) throw new Error(await errText(r));
       const rd = r.body.getReader(); const dec = new TextDecoder(); let buf = "";
       for (;;) {
@@ -158,6 +158,7 @@
       else { b.body.classList.remove("cursor"); b.body.appendChild(el("p", "err", "Could not get an answer: " + e.message)); b.status.textContent = ""; }
     } finally {
       b.body.classList.remove("cursor"); b.status.textContent = stopped ? "Stopped." : "";
+      if (S.priv && !failed && b.text) { S.hist.push({ role: "user", content: text.slice(0, 4000) }, { role: "assistant", content: b.text.slice(0, 4000) }); }
       footer(b, done, failed && !stopped ? text : null);
       S.busy = false; S.ctl = null; $("send").textContent = "Send"; $("send").type = "submit";
       loadConvs(); $("in").focus();
@@ -178,6 +179,7 @@
 
   // ---------- conversations
   async function loadConvs() {
+    if (S.priv) { $("convs").textContent = ""; return; }  // private mode: server par history hai hi nahi
     try {
       const r = await fetch("/api/conversations", { headers: headers() });
       if (!r.ok) return;
@@ -203,16 +205,17 @@
     });
     closeNav(); loadConvs(); S.stick = true; scroll();
   }
-  function newChat() { if (S.busy && S.ctl) S.ctl.abort(); S.conv = null; msgs.textContent = ""; $("welcome").hidden = false; closeNav(); loadConvs(); $("in").focus(); }
+  function newChat() { if (S.busy && S.ctl) S.ctl.abort(); S.conv = null; S.hist = []; msgs.textContent = ""; $("welcome").hidden = false; closeNav(); loadConvs(); $("in").focus(); }
 
   // ---------- models
   async function loadModels() {
-    try { const r = await fetch("/api/models"); const j = await r.json(); S.models = j.models; S.model = j.default; } catch (e) { S.models = []; }
+    try { const r = await fetch("/api/models"); const j = await r.json(); S.models = j.models; S.model = j.default; S.priv = !!j.private; } catch (e) { S.models = []; }
     const saved = store.get("tl_model");
     if (saved && S.models.some((m) => m.id === saved)) S.model = saved;
     const sel = $("model"); sel.textContent = "";
     S.models.forEach((m) => { const o = el("option", null, m.name + " - " + m.tagline); o.value = m.id; sel.appendChild(o); });
     sel.value = S.model; describe();
+    if (S.priv) { const n = el("p", "mut", "Private mode: your chats are not saved. Refresh clears them."); n.style.cssText = "padding:8px 12px;font-size:12px;opacity:.7"; $("convs").appendChild(n); }
   }
   function describe() { const m = S.models.find((x) => x.id === S.model); $("mdesc").textContent = m ? m.description : ""; }
   $("model").addEventListener("change", (e) => { S.model = e.target.value; store.set("tl_model", S.model); describe(); });

@@ -6,6 +6,39 @@ from typing import AsyncIterator
 import httpx
 
 
+def llm_ready_cfg(c: dict) -> bool:
+    """LLM tayyar? Bahari (key wala, OpenAI-compatible) ho to sirf enabled+key; local ho to enabled."""
+    return bool(c.get("enabled"))
+
+
+async def stream_chat(c: dict, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.5) -> AsyncIterator[str]:
+    """OpenAI-compatible endpoint (apna llama.cpp ya koi bhi free provider: Groq, Gemini, OpenRouter...).
+    Key/model/URL config ya env (SS_LLM_*) se aate hain; key kabhi log/response mein nahi jati."""
+    headers = {"Content-Type": "application/json"}
+    if c.get("api_key"):
+        headers["Authorization"] = "Bearer " + c["api_key"]
+    payload = {"messages": messages, "stream": True, "temperature": temperature, "max_tokens": max_tokens}
+    if c.get("model"):
+        payload["model"] = c["model"]
+    url = c["base_url"].rstrip("/") + (c.get("path") or "/v1/chat/completions")
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as cl:
+        async with cl.stream("POST", url, json=payload, headers=headers) as r:
+            if r.status_code != 200:
+                raise RuntimeError(f"llm http {r.status_code}")
+            async for line in r.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    return
+                try:
+                    delta = json.loads(data)["choices"][0]["delta"].get("content")
+                except (KeyError, ValueError, IndexError, TypeError):
+                    continue
+                if delta:
+                    yield delta
+
+
 async def stream_local_llm(base_url: str, prompt: str) -> AsyncIterator[str]:
     """Apne hi server par chalte llama.cpp (OpenAI-compatible) se token stream.
     Ye third-party API nahi: aap ka apna model, aap ki apni machine."""

@@ -25,6 +25,7 @@ def server(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("ui")
     cfg = make_cfg(tmp, brain={"live_research": False})
     cfg["chat"]["anon_rate_per_min"] = 1000
+    cfg["chat"]["private_default"] = False  # history-wale tests; private mode alag test mein
     cfg["server"]["rate_per_min"] = 1000
     db = DB(cfg["general"]["db_path"])
     seed_docs(db, [("http://t.test/crawler", "Understanding web crawlers", TXT),

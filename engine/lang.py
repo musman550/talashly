@@ -29,6 +29,10 @@ MSG: dict[str, dict[str, str]] = {
         "en": "I found some related information, but nothing that answers this directly. Could you rephrase it or add more detail?",
         "roman": "Kuch mutaalliqa maloomat mili hai lekin seedha jawab nahi mila. Kya aap sawal thora aur wazeh kar sakte hain?",
         "ur": "کچھ متعلقہ معلومات ملی ہیں لیکن براہِ راست جواب نہیں ملا۔ کیا آپ سوال کو مزید واضح کر سکتے ہیں؟"},
+    "needllm": {
+        "en": "I can build complete websites right now (tell me the business name and type, e.g. \"website for Noor Bakery\"). For custom writing or code like this, the site owner needs to switch on my AI writer, and then I'll do it in seconds.",
+        "roman": "Main abhi mukammal website bana sakta hoon (business ka naam aur qism batayein, jaise \"Noor Bakery ki website\"). Is tarah ki custom likhai ya code ke liye site owner ko mera AI writer on karna hoga, phir main seconds mein kar dunga.",
+        "ur": "میں ابھی مکمل ویب سائٹ بنا سکتا ہوں (بزنس کا نام اور قسم بتائیں)۔ اس طرح کی کسٹم تحریر یا کوڈ کے لیے سائٹ اونر کو میرا AI رائٹر آن کرنا ہوگا، پھر میں سیکنڈوں میں کر دوں گا۔"},
     "clarify": {
         "en": "I didn't quite get that. What would you like to know?",
         "roman": "Mujhe samajh nahi aaya. Aap kya jaanna chahte hain?",

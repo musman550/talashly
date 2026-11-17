@@ -48,3 +48,9 @@ Works with the OpenAI SDK (`base_url="http://127.0.0.1:8000/v1"`) and no-code to
 - SEO files and structured data follow best practice, but no one can guarantee search rankings.
 
 License: MIT.
+
+
+## Smart layer, private chat and optional free AI writer
+- **Private by default**: the browser keeps the conversation in memory only and sends the last few turns; the server saves no chat text. Refresh = clean slate. (`[chat] private_default = false` brings back saved history.) Only unanswered questions are noted anonymously so the crawler can learn what is missing.
+- **Website builder** (no AI key needed): "make a website for Noor Bakery" returns a complete responsive Tailwind CSS page.
+- **Optional AI writer** (any OpenAI-compatible provider, e.g. Groq, Gemini, OpenRouter, or your own llama.cpp): set `SS_LLM_URL`, `SS_LLM_KEY`, `SS_LLM_MODEL` (and `SS_LLM_PATH` if the path is not `/v1/chat/completions`) in `.env`. Then tasks (write, code, translate...) and questions the index cannot answer go to the AI writer; Deep model still uses research + sources.

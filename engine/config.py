@@ -18,16 +18,16 @@ DEFAULTS: dict[str, Any] = {
     },
     "recrawl": {"news_minutes": 30, "default_hours": 24, "max_hours": 168},
     "search": {"default_limit": 8, "recency_half_life_days": 30},
-    "llm": {"enabled": False, "base_url": "http://127.0.0.1:8081"},
+    "llm": {"enabled": False, "base_url": "http://127.0.0.1:8081", "api_key": "", "model": "", "path": "/v1/chat/completions"},
     "server": {"host": "127.0.0.1", "port": 8000, "require_key": False, "workers": 2, "rate_per_min": 60,
                "cors": True},
     "site": {"name": "Talashly", "url": "http://127.0.0.1:8000"},
     # chat: max_concurrent = ek waqt mein kitne jawab ban sakte hain; queue_max = intezar mein kitne; 0 quota = unlimited
     "chat": {"max_concurrent": 16, "queue_max": 200, "max_message_chars": 4000, "max_convs_per_owner": 100,
              "max_msgs_per_conv": 400, "anon_rate_per_min": 20, "key_rate_per_min": 60, "daily_quota_anon": 200,
-             "daily_quota_key": 5000, "signup_enabled": True, "signup_per_hour_per_ip": 5},
+             "daily_quota_key": 5000, "signup_enabled": True, "signup_per_hour_per_ip": 5, "private_default": True},
     "brain": {
-        "live_research": True, "live_timeout_s": 12, "live_fetch_max": 6, "weak_coverage": 0.6,
+        "live_research": True, "live_timeout_s": 12, "live_fetch_max": 6, "weak_coverage": 0.6, "min_coverage": 0.34,
         "auto_expand": True, "expand_votes": 5, "max_domains": 300, "gap_retries": 3,
     },
     "maintenance": {"max_db_mb": 2048, "backup_keep": 7, "check_every_s": 1800, "stuck_after_s": 300},
@@ -88,6 +88,11 @@ def load_config(path: str | None = None) -> dict[str, Any]:
         except tomllib.TOMLDecodeError as e:  # file kharab: defaults par chalo, system na rukay
             problem = f"config.toml parse error ({e}); defaults use ho rahe hain"
     cfg = _merge(DEFAULTS, user)
+    if os.environ.get("SS_LLM_URL", "").startswith(("http://", "https://")):  # free provider env se (key file mein nahi)
+        cfg["llm"].update(enabled=True, base_url=os.environ["SS_LLM_URL"].strip(),
+                          api_key=os.environ.get("SS_LLM_KEY", "").strip(), model=os.environ.get("SS_LLM_MODEL", "").strip())
+        if os.environ.get("SS_LLM_PATH"):
+            cfg["llm"]["path"] = os.environ["SS_LLM_PATH"].strip()
     if os.environ.get("SS_SITE_URL", "").startswith(("http://", "https://")):  # hosting par public address env se
         cfg["site"]["url"] = os.environ["SS_SITE_URL"].strip()
     cfg["_problems"] = ([problem] if problem else []) + validate(cfg)

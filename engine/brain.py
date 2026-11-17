@@ -354,7 +354,11 @@ class Brain:
 
         if weak and live_ok:
             yield "step", {"msg": tr("weak", q)}
-            lr = await self.live_research(q)
+            try:  # kuch bhi ho, ek sawal live research mein 1.5x timeout se zyada nahi rukega
+                lr = await asyncio.wait_for(self.live_research(q), timeout=float(self.b["live_timeout_s"]) * 1.5 + 5)
+            except asyncio.TimeoutError:
+                self.db.log("heal", f"live research timeout: {q[:60]}")
+                lr = {"tried": 0, "indexed": 0, "urls": []}
             if lr["indexed"]:
                 yield "step", {"msg": tr("live_ok", q, n=lr["indexed"])}
                 hits = self.searcher.search_many(subs, limit)
@@ -362,6 +366,8 @@ class Brain:
         if not hits or cov < self.b["weak_coverage"]:
             self.record_gap(q)  # system isay yaad rakhta hai aur background mein dobara koshish karega
 
+        if hits and cov < float(self.b.get("min_coverage", 0.34)):
+            hits = []  # bohat kamzor match: bekaar jumle dikhane se behtar hai saaf "jawab nahi"
         yield "sources", [self._hit_json(h, ts, i) for i, h in enumerate(hits[: (nsources or (10 if deep else 6))], 1)]
         if not hits:
             yield "token", tr("none", q)

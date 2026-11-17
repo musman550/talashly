@@ -15,8 +15,10 @@ from .brain import Brain
 from .db import DB
 from .lang import reply_lang, tr
 from .models import Model, get_model
-from .policy import is_unclear, policy_check, strip_cites, wants_sources
-from .search import Searcher, terms
+from .builder import build_site, wants_site
+from .llm import stream_chat
+from .policy import CREATIVE, intent, is_unclear, policy_check, strip_cites, wants_sources
+from .search import Searcher, coverage, terms
 
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 CLIENT_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
@@ -120,6 +122,17 @@ def format_with_sources(text: str, sources: list[dict]) -> str:
     return f"{text}\n\nSources:\n" + "\n".join(lines)
 
 
+SYSTEM_PROMPT = (
+    "You are Talashly's assistant (model MUS 7.01): warm, direct and expert, like a professional human colleague. "
+    "First work out what the user actually wants and what a great answer looks like; if truly ambiguous ask ONE short question. "
+    "Reply in the user's language (English by default). Be concise but complete. Do the task instead of explaining why you might not; "
+    "never say 'I cannot' for ordinary requests. Decline only clearly harmful requests (weapons, malware, self-harm methods, sexual "
+    "content involving minors, hate, fraud) briefly, and offer a safe alternative. Never mention sources, searching, an index, or your "
+    "training data unless asked. For websites output one complete single-file HTML page using Tailwind CSS via CDN, responsive, in a "
+    "```html block. Do not claim to be human."
+)
+
+
 class Chat:
     def __init__(self, cfg: dict, db: DB, brain: Brain, searcher: Searcher):
         self.cfg, self.db, self.brain, self.searcher = cfg, db, brain, searcher
@@ -189,7 +202,8 @@ class Chat:
 
     # ---------------------------------------------------------------- main
     async def stream(self, owner: str, role: str, text: str, conv_id: str | None = None, model_id: str | None = None,
-                     history_user: str | None = None, persist: bool = True) -> AsyncIterator[tuple[str, Any]]:
+                     history_user: str | None = None, persist: bool = True,
+                     history: list[dict] | None = None) -> AsyncIterator[tuple[str, Any]]:
         t0 = time.time()
         text = _CTRL.sub("", text or "").strip()
         if not text:
@@ -203,6 +217,8 @@ class Chat:
 
         new_conv = False
         prev_user = history_user
+        if not prev_user and history:
+            prev_user = next((h["content"] for h in reversed(history) if h.get("role") == "user"), None)
         if persist:
             if conv_id:
                 conv = self.get_conv(owner, conv_id)
@@ -249,41 +265,53 @@ class Chat:
                 yield "token", talk
                 done = {"mode": "chat" if verdict is None else verdict, "model": model.id}
             else:
-                eq = contextualize(text, prev_user)
-                if show and eq != text:
-                    yield "rewrite", {"query": eq}
-                bq = eq
-                if model.code_first and not re.match(r"\s*code:", eq, re.I) and self.searcher.search_code(eq, None, 1):
-                    bq = "code: " + eq
-                try:
-                    async for ev, data in self.brain.run(
-                            bq, role, deep=model.deep, live=model.live, sentences=model.sentences,
-                            nsources=model.sources, weak_cov=model.weak_cov, stream_delay=0.004):
-                        if ev == "done":
-                            done = dict(data)
-                            done["model"] = model.id
-                            continue  # done ham aakhir mein khud bhejte hain
-                        if not show:
-                            if ev in ("plan", "step", "sources"):
-                                continue  # process/sources default mein nahi dikhte
-                            if ev in ("token", "replace"):
-                                data = strip_cites(data)
-                        if ev == "token":
-                            buf += data
-                        elif ev == "replace":
-                            buf = data
-                        elif ev == "sources":
-                            sources = data
-                        yield ev, data
-                    if not show and strip_cites(buf) != buf:  # tukron mein bate marker ka bachav
-                        buf = strip_cites(buf)
-                        yield "replace", buf
-                except Exception as e:  # noqa: BLE001  koi bug ho to bhi user ko saaf jawab; log mein record
-                    self.db.log("error", f"chat failed {type(e).__name__}: {e}")
-                    msg = tr("error", text)
-                    buf = (buf + "\n\n" if buf else "") + msg
-                    yield "token", msg
-                    done = {"mode": "error", "model": model.id}
+                smart_done = None
+                async for ev, data in self._smart(text, history, prev_user, model):
+                    if ev == "done":
+                        smart_done = data
+                        continue
+                    if ev == "token":
+                        buf += data
+                    yield ev, data
+                if smart_done is not None:
+                    done = dict(smart_done)
+                    done["model"] = model.id
+                else:
+                    eq = contextualize(text, prev_user)
+                    if show and eq != text:
+                        yield "rewrite", {"query": eq}
+                    bq = eq
+                    if model.code_first and not re.match(r"\s*code:", eq, re.I) and self.searcher.search_code(eq, None, 1):
+                        bq = "code: " + eq
+                    try:
+                        async for ev, data in self.brain.run(
+                                bq, role, deep=model.deep, live=model.live, sentences=model.sentences,
+                                nsources=model.sources, weak_cov=model.weak_cov, stream_delay=0.004):
+                            if ev == "done":
+                                done = dict(data)
+                                done["model"] = model.id
+                                continue  # done ham aakhir mein khud bhejte hain
+                            if not show:
+                                if ev in ("plan", "step", "sources"):
+                                    continue  # process/sources default mein nahi dikhte
+                                if ev in ("token", "replace"):
+                                    data = strip_cites(data)
+                            if ev == "token":
+                                buf += data
+                            elif ev == "replace":
+                                buf = data
+                            elif ev == "sources":
+                                sources = data
+                            yield ev, data
+                        if not show and strip_cites(buf) != buf:  # tukron mein bate marker ka bachav
+                            buf = strip_cites(buf)
+                            yield "replace", buf
+                    except Exception as e:  # noqa: BLE001  koi bug ho to bhi user ko saaf jawab; log mein record
+                        self.db.log("error", f"chat failed {type(e).__name__}: {e}")
+                        msg = tr("error", text)
+                        buf = (buf + "\n\n" if buf else "") + msg
+                        yield "token", msg
+                        done = {"mode": "error", "model": model.id}
             done["sources_shown"] = bool(show and sources)
             done["took_ms"] = round((time.time() - t0) * 1000)
             if persist:
@@ -298,6 +326,53 @@ class Chat:
                 except Exception:  # noqa: BLE001
                     pass
             self._release()
+
+    async def _smart(self, text: str, history: list[dict] | None, prev_user: str | None, model: Model) -> AsyncIterator[tuple[str, Any]]:
+        """Insani dimaag: pehle samjho user kya chahta hai. Website/kaam ke sawal seedha banao; AI writer (LLM) on ho aur
+        index kamzor ho to usi se jawab. Kuch na bane to kuch yield nahi karta aur normal (index wala) rasta chalta hai."""
+        llm = self.cfg["llm"]
+        ready = bool(llm.get("enabled"))
+        site = wants_site(text)
+        if site and not ready:
+            yield "token", build_site(text)
+            yield "done", {"mode": "builder"}
+            return
+        if model.deep:
+            return  # Deep: hamesha research + sources
+        eq = contextualize(text, prev_user)
+        try:
+            weak = coverage(eq, self.searcher.search_many([eq], 8)) < 0.6
+        except Exception:  # noqa: BLE001  search gira: normal rasta apna error-jawab dega
+            return
+        if not ready:
+            if CREATIVE.search(text) and weak:
+                yield "token", tr("needllm", text)
+                yield "done", {"mode": "needllm"}
+            return
+        if not (site or intent(text) == "task" or weak):
+            return
+        msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+        for h in (history or [])[-6:]:
+            if h.get("role") in ("user", "assistant") and h.get("content"):
+                msgs.append({"role": h["role"], "content": str(h["content"])[:2000]})
+        msgs.append({"role": "user", "content": text})
+        got = False
+        try:
+            async for tok in stream_chat(llm, msgs):
+                got = True
+                yield "token", tok
+            if got:
+                yield "done", {"mode": "llm-direct"}
+                return
+        except Exception as e:  # noqa: BLE001
+            self.db.log("heal", f"llm direct failed {type(e).__name__}: {e}")
+            if got:
+                yield "token", "\n\n" + tr("error", text)
+                yield "done", {"mode": "error"}
+                return
+        if site:  # LLM gira: builder se phir bhi kaam ho jaye
+            yield "token", build_site(text)
+            yield "done", {"mode": "builder"}
 
     async def complete(self, role: str, text: str, model_id: str | None, history_user: str | None) -> dict:
         """Stateless poora jawab (OpenAI-compatible endpoint ke liye)."""

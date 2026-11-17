@@ -50,10 +50,17 @@ class UserIn(BaseModel):
     rate_per_min: int = Field(default=60, ge=1, le=100000)
 
 
+class HistMsg(BaseModel):
+    role: str = Field(max_length=12)
+    content: str = Field(max_length=4000)
+
+
 class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=20000)
     conversation_id: str | None = Field(default=None, max_length=64)
     model: str | None = Field(default=None, max_length=64)
+    private: bool = False                                          # True: server par kuch save nahi hota
+    history: list[HistMsg] | None = Field(default=None, max_length=12)  # private mode mein browser bhejta hai
 
 
 class KeyIn(BaseModel):
@@ -302,7 +309,8 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     # ---------------------------------------------------------------- chat API
     @app.get("/api/models")
     async def api_models():
-        return {"default": "mus-7.01", "models": [m.public() for m in MODELS.values()]}
+        return {"default": "mus-7.01", "models": [m.public() for m in MODELS.values()],
+                "private": bool(cfg["chat"].get("private_default", True))}
 
     @app.post("/api/chat")
     async def api_chat(body: ChatIn, request: Request, u: dict = Depends(current_user),
@@ -313,7 +321,9 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
         _charge(u, owner)
 
         async def gen():
-            async for ev, data in chat.stream(owner, u["role"], body.message, body.conversation_id, body.model):
+            hist = [h.model_dump() for h in body.history] if body.history else None
+            async for ev, data in chat.stream(owner, u["role"], body.message, None if body.private else body.conversation_id,
+                                              body.model, persist=not body.private, history=hist):
                 yield _sse(ev, data)
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
