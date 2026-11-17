@@ -183,3 +183,61 @@ def test_grounded_llm_path_sends_key_and_hides_think(tmp_path, monkeypatch):
         text = "".join(ev(evs, "token"))
         assert "plan" not in text and "sekret" not in text
     assert "Bearer sekret" in calls
+
+
+def test_repeat_question_is_served_from_cache_but_sources_requests_are_not(tmp_path):
+    cfg, app = build(tmp_path)
+    with TestClient(app) as c:
+        _, a = chat(c, "what does a polite crawler do")
+        da = ev(a, "done")[0]
+        assert da["mode"] == "extractive" and not da.get("cached")
+        _, b = chat(c, "What does a polite crawler do?")
+        db_ = ev(b, "done")[0]
+        assert db_.get("cached") is True and "".join(ev(b, "token")) == "".join(ev(a, "token"))
+        _, d = chat(c, "what does a polite crawler do with sources")
+        assert not ev(d, "done")[0].get("cached") and "sources" in names(d)
+
+
+def test_fuzzy_learned_match_and_decay(tmp_path):
+    cfg, app = build(tmp_path)
+    ans = "A polite crawler obeys robots.txt and waits between requests to the same host."
+    q = "what does a polite crawler do on a website"
+    with TestClient(app) as c:
+        for cid in "abc":
+            _fb(c, cid, q, ans, "up")
+        _, e = chat(c, "what does a polite crawler do on website")      # ek lafz ka farq: 8/9 milta hai
+        assert ev(e, "done")[0]["mode"] == "learned"
+        _, e = chat(c, "tell me about cheese factories please")
+        assert ev(e, "done")[0]["mode"] != "learned"
+        from engine.db import DB
+        db = DB(cfg["general"]["db_path"])
+        db.x("UPDATE learned SET ts=ts-?", (70 * 86400,))              # 70 din purana: decay
+        db.conn.close()
+        _, e = chat(c, q)
+        assert ev(e, "done")[0]["mode"] != "learned"
+
+
+def test_good_and_bad_commands_and_export(tmp_path, capsys):
+    cfg, app = build(tmp_path)
+    q, ans = "what does a polite crawler do", "A polite crawler obeys robots.txt and waits between requests to the same host."
+    hist = [{"role": "user", "content": q}, {"role": "assistant", "content": ans}]
+    with TestClient(app) as c:
+        for cid in "abc":
+            r = c.post("/api/chat", json={"message": "/good", "private": True, "history": hist}, headers={"X-Client-Id": cid * 24})
+            assert "Thanks, noted" in r.text
+        r = c.post("/api/chat", json={"message": "/bad", "private": True}, headers={"X-Client-Id": "z" * 24})
+        assert "Ask me something first" in r.text
+        _, e = chat(c, q)
+        assert ev(e, "done")[0]["mode"] == "learned"
+    import json as _json
+    from engine import __main__ as cli
+    from engine import config as cfgmod
+    orig = cfgmod.load_config
+    cfgmod.load_config = lambda *a, **k: cfg
+    try:
+        out = tmp_path / "ex.jsonl"
+        assert cli.main(["export-feedback", "--out", str(out)]) == 0
+    finally:
+        cfgmod.load_config = orig
+    rows = [_json.loads(x) for x in out.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 1 and rows[0]["ups"] == 3 and rows[0]["messages"][1]["content"] == ans

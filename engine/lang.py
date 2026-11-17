@@ -33,6 +33,14 @@ MSG: dict[str, dict[str, str]] = {
         "en": "I can build complete websites right now (tell me the business name and type, e.g. \"website for Noor Bakery\"). For custom writing or code like this, the site owner needs to switch on my AI writer, and then I'll do it in seconds.",
         "roman": "Main abhi mukammal website bana sakta hoon (business ka naam aur qism batayein, jaise \"Noor Bakery ki website\"). Is tarah ki custom likhai ya code ke liye site owner ko mera AI writer on karna hoga, phir main seconds mein kar dunga.",
         "ur": "میں ابھی مکمل ویب سائٹ بنا سکتا ہوں (بزنس کا نام اور قسم بتائیں)۔ اس طرح کی کسٹم تحریر یا کوڈ کے لیے سائٹ اونر کو میرا AI رائٹر آن کرنا ہوگا، پھر میں سیکنڈوں میں کر دوں گا۔"},
+    "fb_ok": {
+        "en": "Thanks, noted. That helps me get better.",
+        "roman": "Shukriya, note kar liya. Is se main behtar hota hoon.",
+        "ur": "شکریہ، نوٹ کر لیا۔ اس سے میں بہتر ہوتا ہوں۔"},
+    "fb_none": {
+        "en": "Ask me something first, then use /good or /bad on my answer.",
+        "roman": "Pehle koi sawal poochein, phir mere jawab par /good ya /bad likhein.",
+        "ur": "پہلے کوئی سوال پوچھیں، پھر میرے جواب پر /good یا /bad لکھیں۔"},
     "clarify": {
         "en": "I didn't quite get that. What would you like to know?",
         "roman": "Mujhe samajh nahi aaya. Aap kya jaanna chahte hain?",

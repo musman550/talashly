@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import OrderedDict
 import re
 import time
 import uuid
@@ -138,6 +139,9 @@ def qkey(text: str) -> str:
     return " ".join(re.findall(r"\w+", text.lower()))[:200]
 
 
+LEARN_TTL_DAYS = 60      # purane yaad kiye jawab 60 din baad khud hat jate hain (knowledge decay)
+CACHE_TTL_S = 900        # tez jawab: wahi sawal 15 minute tak memory se
+CACHE_MAX = 300
 LEARN_MIN_VOTERS = 3  # itne alag log 👍 den tab hi jawab "seekha hua" mana jata hai (ek akela bigaar na sake)
 
 
@@ -148,6 +152,7 @@ class Chat:
         self._sem: asyncio.Semaphore | None = None
         self.waiting = 0
         self.active = 0
+        self._cache: OrderedDict[tuple, tuple[float, str, str]] = OrderedDict()
 
     # ---------------------------------------------------------------- storage
     def new_conv(self, owner: str, model: str, title: str = "") -> str:
@@ -264,6 +269,24 @@ class Chat:
 
             show = wants_sources(text, model)
             talk = smalltalk(text, model)
+            if talk is None and text.strip().lower() in ("/good", "/bad"):
+                q_a = None
+                if history:
+                    us = [h for h in history if h.get("role") == "user"]
+                    asst = [h for h in history if h.get("role") == "assistant"]
+                    if us and asst:
+                        q_a = (us[-1]["content"], asst[-1]["content"])
+                elif persist and conv_id:
+                    rows = self.db.q("SELECT role, content FROM messages WHERE conv_id=? ORDER BY id DESC LIMIT 4", (conv_id,))
+                    a_ = next((r["content"] for r in rows if r["role"] == "assistant"), None)
+                    u_ = next((r["content"] for r in rows if r["role"] == "user" and not r["content"].startswith("/")), None)
+                    if a_ and u_:
+                        q_a = (u_, a_)
+                if q_a:
+                    self.feedback(owner, q_a[0], q_a[1], "up" if text.strip().lower() == "/good" else "down")
+                    talk = tr("fb_ok", text)
+                else:
+                    talk = tr("fb_none", text)
             verdict = None if talk is not None else policy_check(text)
             if talk is None and verdict is None and is_unclear(text):
                 verdict = "clarify"
@@ -286,40 +309,49 @@ class Chat:
                     done["model"] = model.id
                 else:
                     eq = contextualize(text, prev_user)
-                    if show and eq != text:
-                        yield "rewrite", {"query": eq}
-                    bq = eq
-                    if model.code_first and not re.match(r"\s*code:", eq, re.I) and self.searcher.search_code(eq, None, 1):
-                        bq = "code: " + eq
-                    try:
-                        async for ev, data in self.brain.run(
-                                bq, role, deep=model.deep, live=model.live, sentences=model.sentences,
-                                nsources=model.sources, weak_cov=model.weak_cov, stream_delay=0.004):
-                            if ev == "done":
-                                done = dict(data)
-                                done["model"] = model.id
-                                continue  # done ham aakhir mein khud bhejte hain
-                            if not show:
-                                if ev in ("plan", "step", "sources"):
-                                    continue  # process/sources default mein nahi dikhte
-                                if ev in ("token", "replace"):
-                                    data = strip_cites(data)
-                            if ev == "token":
-                                buf += data
-                            elif ev == "replace":
-                                buf = data
-                            elif ev == "sources":
-                                sources = data
-                            yield ev, data
-                        if not show and strip_cites(buf) != buf:  # tukron mein bate marker ka bachav
-                            buf = strip_cites(buf)
-                            yield "replace", buf
-                    except Exception as e:  # noqa: BLE001  koi bug ho to bhi user ko saaf jawab; log mein record
-                        self.db.log("error", f"chat failed {type(e).__name__}: {e}")
-                        msg = tr("error", text)
-                        buf = (buf + "\n\n" if buf else "") + msg
-                        yield "token", msg
-                        done = {"mode": "error", "model": model.id}
+                    ckey = (model.id, qkey(text))
+                    cached = None if (show or eq != text) else self._cache_get(ckey)
+                    if cached:
+                        buf = cached[0]
+                        yield "token", buf
+                        done = {"mode": cached[1], "model": model.id, "cached": True}
+                    else:
+                        if show and eq != text:
+                            yield "rewrite", {"query": eq}
+                        bq = eq
+                        if model.code_first and not re.match(r"\s*code:", eq, re.I) and self.searcher.search_code(eq, None, 1):
+                            bq = "code: " + eq
+                        try:
+                            async for ev, data in self.brain.run(
+                                    bq, role, deep=model.deep, live=model.live, sentences=model.sentences,
+                                    nsources=model.sources, weak_cov=model.weak_cov, stream_delay=0.004):
+                                if ev == "done":
+                                    done = dict(data)
+                                    done["model"] = model.id
+                                    continue  # done ham aakhir mein khud bhejte hain
+                                if not show:
+                                    if ev in ("plan", "step", "sources"):
+                                        continue  # process/sources default mein nahi dikhte
+                                    if ev in ("token", "replace"):
+                                        data = strip_cites(data)
+                                if ev == "token":
+                                    buf += data
+                                elif ev == "replace":
+                                    buf = data
+                                elif ev == "sources":
+                                    sources = data
+                                yield ev, data
+                            if not show and strip_cites(buf) != buf:  # tukron mein bate marker ka bachav
+                                buf = strip_cites(buf)
+                                yield "replace", buf
+                        except Exception as e:  # noqa: BLE001  koi bug ho to bhi user ko saaf jawab; log mein record
+                            self.db.log("error", f"chat failed {type(e).__name__}: {e}")
+                            msg = tr("error", text)
+                            buf = (buf + "\n\n" if buf else "") + msg
+                            yield "token", msg
+                            done = {"mode": "error", "model": model.id}
+                        if not show and eq == text and done.get("mode") in ("extractive", "llm") and buf and len(buf) < 4000:
+                            self._cache_put(ckey, buf, done["mode"])
             done["sources_shown"] = bool(show and sources)
             done["took_ms"] = round((time.time() - t0) * 1000)
             if persist:
@@ -335,14 +367,43 @@ class Chat:
                     pass
             self._release()
 
+    def _cache_get(self, key: tuple) -> tuple[str, str] | None:
+        e = self._cache.get(key)
+        if not e:
+            return None
+        if time.time() - e[0] > CACHE_TTL_S:
+            self._cache.pop(key, None)
+            return None
+        self._cache.move_to_end(key)
+        return e[1], e[2]
+
+    def _cache_put(self, key: tuple, text: str, mode: str) -> None:
+        self._cache[key] = (time.time(), text, mode)
+        self._cache.move_to_end(key)
+        while len(self._cache) > CACHE_MAX:
+            self._cache.popitem(last=False)
+
     def learned_answer(self, text: str) -> str | None:
+        """Users ke 👍 se seekha jawab. Bilkul wahi sawal, ya 80%+ milte-julte alfaaz (Hinglish/ordering ka farq)."""
         k = qkey(text)
         if len(k) < 4:
             return None
-        r = self.db.q("SELECT a FROM learned WHERE qkey=?", (k,))
+        cutoff = time.time() - LEARN_TTL_DAYS * 86400
+        r = self.db.q("SELECT qkey, a FROM learned WHERE qkey=? AND ts>?", (k, cutoff))
         if not r:
-            return None
-        v = self.db.q("SELECT SUM(vote=1) up, SUM(vote=-1) down FROM learned_votes WHERE qkey=?", (k,))[0]
+            words = set(k.split())
+            if len(words) < 3:
+                return None
+            best = None
+            for row in self.db.q("SELECT qkey, a FROM learned WHERE ts>? ORDER BY ts DESC LIMIT 300", (cutoff,)):
+                w2 = set(row["qkey"].split())
+                if w2 and len(words & w2) / len(words | w2) >= 0.8:
+                    best = row
+                    break
+            if best is None:
+                return None
+            r = [best]
+        v = self.db.q("SELECT SUM(vote=1) up, SUM(vote=-1) down FROM learned_votes WHERE qkey=?", (r[0]["qkey"],))[0]
         up, down = int(v["up"] or 0), int(v["down"] or 0)
         return r[0]["a"] if up >= LEARN_MIN_VOTERS and up > 2 * down else None
 
@@ -351,6 +412,7 @@ class Chat:
         k = qkey(question)
         if len(k) < 4:
             return "ignored"
+        self.db.x("DELETE FROM learned WHERE ts<?", (time.time() - LEARN_TTL_DAYS * 86400,))
         voter = uuid.uuid5(uuid.NAMESPACE_URL, owner).hex
         if vote == "up":
             a = answer.strip()

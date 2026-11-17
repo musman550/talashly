@@ -189,6 +189,26 @@ def cmd_status(a) -> int:
     return 0
 
 
+def cmd_export_feedback(a) -> int:
+    """Users ke 👍 se bane achhe (sawal, jawab) JSONL mein: baad mein fine-tuning ke liye (GPU chahiye, yahan nahi hoti)."""
+    import json
+
+    from .config import load_config
+    from .db import DB
+
+    db = DB(load_config()["general"]["db_path"])
+    rows = db.q("""SELECT l.q, l.a, SUM(v.vote=1) ups, SUM(v.vote=-1) downs FROM learned l
+                   JOIN learned_votes v ON v.qkey=l.qkey GROUP BY l.qkey HAVING ups>=? ORDER BY ups DESC""", (a.min_up,))
+    out = open(a.out, "w", encoding="utf-8") if a.out else sys.stdout
+    for r in rows:
+        out.write(json.dumps({"messages": [{"role": "user", "content": r["q"]}, {"role": "assistant", "content": r["a"]}],
+                              "ups": int(r["ups"]), "downs": int(r["downs"] or 0)}, ensure_ascii=False) + "\n")
+    if a.out:
+        out.close()
+        print(f"{len(rows)} examples -> {a.out}")
+    return 0
+
+
 def cmd_doctor(a) -> int:
     """Har cheez check karo aur saaf bataao kya theek hai, kya nahi, aur kaise theek hoga."""
     ok = True
@@ -286,6 +306,10 @@ def main(argv: list[str] | None = None) -> int:
     s.set_defaults(fn=cmd_restore)
     s = sub.add_parser("status")
     s.set_defaults(fn=cmd_status)
+    s = sub.add_parser("export-feedback", help="achhe (sawal, jawab) JSONL mein export (fine-tuning ke liye)")
+    s.add_argument("--out", default="")
+    s.add_argument("--min-up", type=int, default=3)
+    s.set_defaults(fn=cmd_export_feedback)
     s = sub.add_parser("doctor", help="system check")
     s.set_defaults(fn=cmd_doctor)
     a = ap.parse_args(argv)
