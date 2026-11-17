@@ -47,3 +47,8 @@ Oracle VM ko ping ki zarurat nahi, lekin alert ke liye ye phir bhi kaam ka hai. 
 `deploy/oracle-setup.sh` ek systemd timer lagata hai jo har 5 minute mein GitHub `main` dekhta hai; naya code ho to
 khud rebuild + restart karta hai (data `./data` safe rehta hai), aur health fail ho to container dobara chalata hai.
 Ek dafa script dobara chalayein (purane VM par): `curl -fsSL https://raw.githubusercontent.com/musman550/talashly/main/deploy/oracle-setup.sh | bash`
+
+
+## Apna AI writer (no API, no key)
+Open-source Qwen3 1.7B (Apache-2.0) via llama.cpp, running on your own VM. Needs a VM with 6 GB+ RAM (Oracle Always Free A1: 2 OCPU / 12 GB).
+On the VM: `bash ~/talashly/deploy/enable-llm.sh`. The script refuses on 1 GB Micro VMs. Talashly then sends tasks and questions the index cannot answer to it.

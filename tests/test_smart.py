@@ -99,3 +99,17 @@ def test_private_mode_saves_nothing(tmp_path):
         r = c.post("/api/chat", json={"message": "hello", "private": True}, headers={"X-Client-Id": "q" * 24})
         assert r.status_code == 200 and "Hello! How can I help you today?" in r.text
         assert c.get("/api/conversations", headers={"X-Client-Id": "q" * 24}).json()["conversations"] == []
+
+
+def test_think_blocks_are_never_shown():
+    import asyncio
+
+    async def run(parts):
+        async def gen():
+            for x in parts:
+                yield x
+        return "".join([t async for t in llm_mod._strip_think(gen())])
+    assert asyncio.run(run(["<think>secret plan</think>", "Hello ", "there"])) == "Hello there"
+    assert asyncio.run(run(["<thi", "nk>hid", "den</th", "ink>\n\nAnswer: 2 < 3"])) == "Answer: 2 < 3"
+    assert asyncio.run(run(["plain text"])) == "plain text"
+    assert asyncio.run(run(["a <b> c"])) == "a <b> c"

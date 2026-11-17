@@ -129,7 +129,7 @@ SYSTEM_PROMPT = (
     "never say 'I cannot' for ordinary requests. Decline only clearly harmful requests (weapons, malware, self-harm methods, sexual "
     "content involving minors, hate, fraud) briefly, and offer a safe alternative. Never mention sources, searching, an index, or your "
     "training data unless asked. For websites output one complete single-file HTML page using Tailwind CSS via CDN, responsive, in a "
-    "```html block. Do not claim to be human."
+    "```html block. Do not claim to be human. /no_think"
 )
 
 

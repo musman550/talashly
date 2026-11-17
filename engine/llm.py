@@ -11,7 +11,40 @@ def llm_ready_cfg(c: dict) -> bool:
     return bool(c.get("enabled"))
 
 
+async def _strip_think(it: AsyncIterator[str]) -> AsyncIterator[str]:
+    """Qwen3 jaise models <think>...</think> likhte hain: wo hissa user ko kabhi nahi dikhta (tukron mein bante tags bhi)."""
+    buf, inside = "", False
+    async for tok in it:
+        buf += tok
+        while True:
+            if inside:
+                i = buf.find("</think>")
+                if i < 0:
+                    buf = buf[-8:] if len(buf) > 8 else buf   # aakhri hissa rakho: tag adha aaya ho sakta hai
+                    break
+                buf, inside = buf[i + 8:].lstrip("\n"), False
+            else:
+                i = buf.find("<think>")
+                if i >= 0:
+                    if buf[:i]:
+                        yield buf[:i]
+                    buf, inside = buf[i + 7:], True
+                    continue
+                keep = 6 if "<" in buf[-7:] else 0   # "<thi" jaisa adhura tag rok lo
+                if len(buf) > keep:
+                    yield buf[:len(buf) - keep]
+                    buf = buf[len(buf) - keep:]
+                break
+    if buf and not inside:
+        yield buf
+
+
 async def stream_chat(c: dict, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.5) -> AsyncIterator[str]:
+    async for t in _strip_think(_stream_chat_raw(c, messages, max_tokens, temperature)):
+        yield t
+
+
+async def _stream_chat_raw(c: dict, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.5) -> AsyncIterator[str]:
     """OpenAI-compatible endpoint (apna llama.cpp ya koi bhi free provider: Groq, Gemini, OpenRouter...).
     Key/model/URL config ya env (SS_LLM_*) se aate hain; key kabhi log/response mein nahi jati."""
     headers = {"Content-Type": "application/json"}

@@ -16,3 +16,15 @@ services:
       - ./data:/app/data          # index.db yahan rehta hai (backup isi folder ka)
       - ./config.toml:/app/config.toml:ro
       - ./seeds.toml:/app/seeds.toml:ro
+
+  # Apna free, open-source AI writer (koi API/key nahi): sirf 6 GB+ RAM wali VM par. deploy/enable-llm.sh isay on karta hai.
+  llm:
+    profiles: ["llm"]
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    command: ["-hf", "unsloth/Qwen3-1.7B-GGUF:Q4_K_M", "--host", "0.0.0.0", "--port", "8081", "-c", "4096", "-t", "2", "--parallel", "2"]
+    environment:
+      - LLAMA_CACHE=/models
+    volumes:
+      - ./data/models:/models      # model ek dafa download hota hai (~1.1 GB), phir yahin rehta hai
+    mem_limit: 3g
