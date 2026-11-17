@@ -156,6 +156,9 @@ def sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", "ignore")).hexdigest()
 
 
+BIG_DB_BYTES = 300 * 1024 * 1024  # is se bari file par start par poora scan nahi (minutes lagte hain); roz ka full check pakar lega
+
+
 def check_file(path: str) -> bool:
     """True agar SQLite file khul jati hai aur quick_check 'ok' deti hai (file maujood na ho to False; nayi file nahi banati)."""
     import os
@@ -165,6 +168,10 @@ def check_file(path: str) -> bool:
     try:
         c = sqlite3.connect(path, timeout=10)
         try:
+            if os.path.getsize(path) > BIG_DB_BYTES:  # sasta check: file khulti hai, schema aur FTS jawab dete hain
+                c.execute("SELECT COUNT(*) FROM docs").fetchone()
+                c.execute("SELECT rowid FROM chunks_fts WHERE chunks_fts MATCH 'a' LIMIT 1").fetchall()
+                return c.execute("PRAGMA schema_version").fetchone() is not None
             return c.execute("PRAGMA quick_check").fetchone()[0] == "ok"
         finally:
             c.close()
@@ -212,6 +219,8 @@ class DB:
         self.conn = sqlite3.connect(path, check_same_thread=False, timeout=30, isolation_level=None)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self.conn.execute("PRAGMA cache_size=-16000")  # ~16 MB (chhoti RAM wali VM ke liye)
+        self.conn.execute("PRAGMA temp_store=FILE")
         self.conn.executescript(SCHEMA_V2)
         try:  # trigram: Chinese/Japanese/Korean ke liye (purane SQLite mein na ho to LIKE fallback)
             self.conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS chunks_tri USING fts5(text, tokenize='trigram')")
@@ -328,6 +337,19 @@ class DB:
             "INSERT INTO domain_state(domain,paused_until) VALUES(?,?) "
             "ON CONFLICT(domain) DO UPDATE SET paused_until=excluded.paused_until",
             (domain, time.time() + seconds))
+
+    def integrity_light(self) -> bool:
+        """Sasta check (milliseconds): DB khulti hai aur FTS jawab deta hai. Poora scan roz ek dafa (integrity())."""
+        try:
+            c = sqlite3.connect(self.path, timeout=10)
+            try:
+                c.execute("SELECT COUNT(*) FROM docs").fetchone()
+                c.execute("SELECT rowid FROM chunks_fts WHERE chunks_fts MATCH 'a' LIMIT 1").fetchall()
+                return True
+            finally:
+                c.close()
+        except sqlite3.DatabaseError:
+            return False
 
     def integrity(self) -> dict[str, Any]:
         """Index ki sehat. Hamesha NAYE chhote connection par chalta hai (lambe-chalte connection ka purana FTS cache

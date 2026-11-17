@@ -142,7 +142,13 @@ class Supervisor:
         db = DB(self.db.path)  # thread-safe: apna connection
         report = []
         try:
-            integ = db.integrity()
+            full_due = force_backup or time.time() - db.get_stat("last_full_check", 0) > 86400 \
+                or not db.integrity_light()
+            integ = {"ok": True}
+            if full_due:
+                integ = db.integrity()
+                if integ.get("ok"):
+                    db.set_stat("last_full_check", time.time())
             if not integ["ok"]:
                 report.append(f"integrity problem {json.dumps(integ)[:200]}")
                 if integ["sqlite"] != "ok":

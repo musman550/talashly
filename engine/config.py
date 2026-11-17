@@ -30,7 +30,7 @@ DEFAULTS: dict[str, Any] = {
         "live_research": True, "live_timeout_s": 12, "live_fetch_max": 6, "weak_coverage": 0.6,
         "auto_expand": True, "expand_votes": 5, "max_domains": 300, "gap_retries": 3,
     },
-    "maintenance": {"max_db_mb": 2048, "backup_keep": 7, "check_every_s": 600, "stuck_after_s": 300},
+    "maintenance": {"max_db_mb": 2048, "backup_keep": 7, "check_every_s": 1800, "stuck_after_s": 300},
     "code": {"paths": [], "max_file_kb": 500},
 }
 

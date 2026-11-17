@@ -2,6 +2,9 @@ services:
   search:
     build: .
     restart: unless-stopped
+    mem_limit: 700m          # 1 GB VM par OS ke liye jagah bachaye (swap alag)
+    memswap_limit: 1500m
+    init: true
     ports: ["8000:8000"]
     env_file:
       - path: .env
