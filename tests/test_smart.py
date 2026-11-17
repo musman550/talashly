@@ -153,3 +153,33 @@ def test_feedback_down_creates_gap_and_static_is_cacheable(tmp_path):
         assert any("volcanoes" in r["q"] for r in db.q("SELECT q FROM gaps"))
         db.conn.close()
         assert "max-age" in c.get("/static/app.js").headers["cache-control"]
+
+
+def test_grounded_llm_path_sends_key_and_hides_think(tmp_path, monkeypatch):
+    calls = []
+
+    def handler(request):
+        calls.append(request.headers.get("authorization"))
+        chunks = ["<think>plan</think>", "A polite crawler waits between requests. [1]"]
+        sse = "".join("data: " + json.dumps({"choices": [{"delta": {"content": t}}]}) + "\n\n" for t in chunks) + "data: [DONE]\n\n"
+        return httpx.Response(200, content=sse.encode(), headers={"content-type": "text/event-stream"})
+
+    real = httpx.AsyncClient
+
+    class Fake(real):
+        def __init__(self, *a, **k):
+            k["transport"] = httpx.MockTransport(handler)
+            super().__init__(*a, **k)
+    monkeypatch.setattr(llm_mod.httpx, "AsyncClient", Fake)
+
+    async def alive(url):
+        return True
+    import engine.brain as brain_mod
+    monkeypatch.setattr(brain_mod, "llm_alive", alive)
+    cfg, app = build(tmp_path)
+    cfg["llm"].update(enabled=True, base_url="http://ai.example:8081", api_key="sekret", model="")
+    with TestClient(app) as c:
+        _, evs = chat(c, "what does a polite crawler do", model="mus-7.01-flash")
+        text = "".join(ev(evs, "token"))
+        assert "plan" not in text and "sekret" not in text
+    assert "Bearer sekret" in calls

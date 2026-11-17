@@ -52,3 +52,11 @@ Ek dafa script dobara chalayein (purane VM par): `curl -fsSL https://raw.githubu
 ## Apna AI writer (no API, no key)
 Open-source Qwen3 1.7B (Apache-2.0) via llama.cpp, running on your own VM. Needs a VM with 6 GB+ RAM (Oracle Always Free A1: 2 OCPU / 12 GB).
 On the VM: `bash ~/talashly/deploy/enable-llm.sh`. The script refuses on 1 GB Micro VMs. Talashly then sends tasks and questions the index cannot answer to it.
+
+
+## AI on a separate machine (split architecture, no third-party AI)
+- Website + search + crawler stay on the Oracle VM. The open-source AI (Qwen3 1.7B via llama.cpp) runs on a *second* machine with 3 GB+ RAM
+  (for example Azure B2pts v2 free for 12 months, or an AWS Free-plan instance).
+- On the AI machine: `bash deploy/llm-node-setup.sh` (creates a random API key, starts llama.cpp, prints the connect command).
+- On the Talashly VM: `bash deploy/connect-llm.sh http://AI-IP:8081 KEY`.
+- Open TCP 8081 on the AI machine's cloud firewall only for the Talashly VM's IP. Traffic is plain HTTP, so the IP allow-list is the protection.

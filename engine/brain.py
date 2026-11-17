@@ -17,7 +17,7 @@ from .codeindex import index_paths
 from .lang import tr
 from .db import DB, domain_of, normalize_url
 from .extract import extract_links, weight
-from .llm import llm_alive, stream_local_llm
+from .llm import llm_alive, stream_chat
 from .search import (Hit, Searcher, build_answer, coverage, detect_script, ground_check, llm_prompt, snippet,
                      terms)
 
@@ -380,7 +380,8 @@ class Brain:
         if use_llm:
             buf: list[str] = []
             try:
-                async for tok in stream_local_llm(self.cfg["llm"]["base_url"], llm_prompt(q, hits)):
+                async for tok in stream_chat(self.cfg["llm"], [{"role": "user", "content": llm_prompt(q, hits) + "\n/no_think"}],
+                                             max_tokens=600, temperature=0.2):
                     buf.append(tok)
                     yield "token", tok
                 text = "".join(buf)
