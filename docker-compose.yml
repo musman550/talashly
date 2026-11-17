@@ -1,5 +1,6 @@
 services:
   search:
+    image: ghcr.io/musman550/talashly:latest   # GitHub Actions banata hai; na mile to VM par build ho jata hai
     build: .
     restart: unless-stopped
     mem_limit: 700m          # 1 GB VM par OS ke liye jagah bachaye (swap alag)

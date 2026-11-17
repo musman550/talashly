@@ -1,3 +1,19 @@
+"""Tests ko config.toml ke crawler hours (din ke hisaab se) par depend nahi hona chahiye: warna din ke waqt ke mutabiq
+crawler wale tests atak jate hain. Is liye load_config() hamesha 24-ghante active hours deta hai.
+(Ye block sab imports se PEHLE hona zaroori hai, kyunke helpers `from engine.config import load_config` karte hain.)"""
+import engine.config as _cfg
+
+_orig_load = _cfg.load_config
+
+
+def _load_config_all_day(*a, **k):
+    cfg = _orig_load(*a, **k)
+    cfg["crawler"]["active_hours"] = ["00:00-24:00"]
+    return cfg
+
+
+_cfg.load_config = _load_config_all_day
+
 import asyncio
 
 import pytest
