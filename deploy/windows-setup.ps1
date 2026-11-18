@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $ip = "137.23.39.13"
 $user = "ubuntu"
 $cands = Get-ChildItem -Path "$HOME\Downloads","$HOME\Desktop","$HOME\Documents","$HOME\.ssh" -File -Recurse -Depth 2 -ErrorAction SilentlyContinue |
-  Where-Object { $_.Extension -ne ".pub" -and ($_.Name -like "ssh-key-*" -or $_.Extension -in ".key",".pem") -and $_.Length -lt 20000 } |
+  Where-Object { $_.Extension -ne ".pub" -and ($_.Name -like "ssh-key-*" -or $_.Extension -in ".key",".pem") -and $_.Length -lt 20000 -and $_.Name -ne "talashly.key" } |
   Where-Object { (Get-Content $_.FullName -TotalCount 1 -ErrorAction SilentlyContinue) -like "-----BEGIN*" } |
   Sort-Object LastWriteTime -Descending
 if (-not $cands) { Write-Host "Private key nahi mili (ssh-key-....key, .pub nahi). Usay Downloads mein rakhein." -ForegroundColor Red; return }
@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Force "$HOME\.ssh" | Out-Null
 $key = $null
 foreach ($c in $cands) {
   $k = "$HOME\.ssh\talashly.key"
-  Copy-Item $c.FullName $k -Force
+  if ($c.FullName -ne $k) { Copy-Item $c.FullName $k -Force }
   icacls $k /inheritance:r | Out-Null
   icacls $k /grant:r "$($env:USERNAME):(R)" | Out-Null
   ssh -i $k -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$user@$ip" "echo ok" 2>$null | Out-Null
