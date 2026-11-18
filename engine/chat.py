@@ -32,7 +32,7 @@ PATTERNS: dict[str, re.Pattern] = {
                         r"( there| talashly| mus| ji| bhai| dost| sir)?$"),
     "thanks": re.compile(r"^(thanks?|thank you( so much)?|thx|ty|shukriya|shukria|jazak\w*|mehrbani|"
                          r"شکریہ|شکراً|شكرا|धन्यवाद|शुक्रिया|谢谢|спасибо|gracias|merci|danke)( a lot| bohat| bahut)?$"),
-    "bye": re.compile(r"^(bye+|goodbye|good night|see you|khuda hafiz|allah hafiz|khudahafiz|allahhafiz|"
+    "bye": re.compile(r"^((thanks?|thank you|shukriya)[ ,]+)?(bye+|goodbye|good night|see you|take care|khuda hafiz|allah hafiz|khudahafiz|allahhafiz|"
                       r"اللہ حافظ|خدا حافظ|الوداع|अलविदा|再见|пока|adios|au revoir)$"),
     "how": re.compile(r"^(how are you|how r u|how are u|kaise ho|kese ho|kaisa hai|kaise hain aap|aap kaise hain|"
                       r"aap kese hain|kya haal hai|kia haal hai|kya hal hai|kaisay ho|کیسے ہو|آپ کیسے ہیں|کیا حال ہے|"
@@ -42,12 +42,36 @@ PATTERNS: dict[str, re.Pattern] = {
                       r"aap ka naam kya hai|tumhara naam kya hai|your name|what is your name|what'?s your name|"
                       r"which model are you|what model are you|kya aap insan hain|kya tum insan ho|"
                       r"آپ کون ہیں|تم کون ہو|آپ کا نام کیا ہے|आप कौन हैं|तुम कौन हो)$"),
+    "sad": re.compile(r"^(i am|i'?m|im|main|mai|mein)? ?(feeling )?(very |bohat |bahut )?(sad|upset|lonely|tired|stressed|depressed|udaas|udas|pareshan|thak gaya|thaka hua|tanha|اداس|پریشان|उदास|परेशान)( hun| hoon| hu| hai| ho gaya| feel kar raha hun)?( aaj| today)?$"),
+    "joke": re.compile(r"^(please |pls )?(tell|say|crack|give) (me )?(a |one )?(joke|funny)( please)?$|^(joke|koi joke|latifa|لطیفہ)( sunao| suna do| batao)?$"),
+    "meta": re.compile(r"^(where|how) (does|do|did) (your|the) (data|knowledge|information|answers?) (come|comes|came|get|gets|got)( from)?$|^(tum|aap) (data|jawab|jawaab) kahan se (late|lete|laate) (ho|hain)$"),
+    "inject": re.compile(r"^(please )?(ignore|forget|disregard) (all |your |the )?(previous|prior|above|earlier)? ?(instructions?|rules|prompt)\b.*|^(print|show|reveal|repeat|tell me) (me )?(your |the )?(system|hidden|initial) (prompt|instructions?)\b.*"),
     "help": re.compile(r"^(help|help me|what can you do|what do you do|how do (i|you) use (you|this)|features|"
                        r"madad|madad karo|kya kar sakte ho|kya kar sakte hain|tum kya kar sakte ho|aap kya kar sakte hain|"
                        r"مدد|آپ کیا کر سکتے ہیں|आप क्या कर सकते हैं)$"),
 }
 
 REPLIES: dict[str, dict[str, list[str]]] = {
+    "sad": {
+        "en": ["I'm sorry you're feeling this way. Do you want to tell me what happened? I'm here to listen, and I can also suggest small things that might help. If it ever feels too heavy, please talk to someone you trust."],
+        "roman": ["Mujhe afsos hai ke aap aisa mehsoos kar rahe hain. Kya hua? Batana chahein to main sun raha hoon, aur chhoti chhoti cheezen bhi suggest kar sakta hoon. Agar bohat bhaari lage to kisi apne se zaroor baat karein."],
+        "ur": ["مجھے افسوس ہے کہ آپ ایسا محسوس کر رہے ہیں۔ کیا ہوا؟ بتانا چاہیں تو میں سن رہا ہوں۔ اگر بہت بھاری لگے تو کسی اپنے سے ضرور بات کریں۔"],
+    },
+    "joke": {
+        "en": ["Why do programmers prefer dark mode? Because light attracts bugs.", "I told my computer I needed a break. Now it won't stop sending me Kit-Kat ads.", "There are 10 kinds of people: those who understand binary and those who don't."],
+        "roman": ["Programmers dark mode kyun pasand karte hain? Kyunke roshni se bugs aate hain.", "Computer se kaha break chahiye, ab woh Kit-Kat ke ads dikhata rehta hai."],
+        "ur": ["پروگرامرز ڈارک موڈ کیوں پسند کرتے ہیں؟ کیونکہ روشنی سے بگز آتے ہیں۔"],
+    },
+    "meta": {
+        "en": ["I learn from public web pages that Talashly crawls and indexes, plus feedback from users. Pick the Deep model, or ask for sources, and I'll show exactly which pages an answer used."],
+        "roman": ["Main un public web pages se seekhta hoon jo Talashly crawl aur index karta hai, aur users ke feedback se. Deep model chunein ya sources maangein to main dikha dunga ke jawab kin pages se aaya."],
+        "ur": ["میں ان عوامی ویب صفحات سے سیکھتا ہوں جو Talashly کرال اور انڈیکس کرتا ہے، اور صارفین کے فیڈبیک سے۔ Deep ماڈل چنیں یا ذرائع مانگیں تو میں دکھا دوں گا۔"],
+    },
+    "inject": {
+        "en": ["I can't share my internal instructions, but I'm happy to help with your actual question. What would you like to know?"],
+        "roman": ["Main apni andruni hidayaat share nahi kar sakta, lekin aap ke asal sawal mein khushi se madad karunga. Kya poochna hai?"],
+        "ur": ["میں اپنی اندرونی ہدایات شیئر نہیں کر سکتا، لیکن آپ کے اصل سوال میں خوشی سے مدد کروں گا۔"],
+    },
     "greet": {
         "en": ["Hello! How can I help you today?"],
         "roman": ["Assalam o alaikum! Main aap ki kya madad kar sakta hoon?"],
@@ -81,11 +105,53 @@ REPLIES: dict[str, dict[str, list[str]]] = {
 }
 
 
+_CALC_OK = re.compile(r"^[\d\s+\-*/().%^x×÷]+$")
+
+
+def calc(text: str) -> str | None:
+    """Saaf arithmetic ("2+2*5 kitna hota hai") - sirf ginti/operators, eval kabhi nahi (ast se)."""
+    import ast, operator as op
+    t = re.sub(r"\b(kitna|kitne|kya|hota|hai|hoga|equals?|is|what|whats|calculate|solve|answer|tell me|batao|\?|=)\b|[?=]", " ", text.lower())
+    t = t.replace("×", "*").replace("÷", "/").replace("^", "**").replace(",", "")
+    t = re.sub(r"(?<=\d)\s*x\s*(?=\d)", "*", t).strip()
+    if re.fullmatch(r"\d{3,}-\d{2,}(-\d+)?|\d{1,4}/\d{1,2}/\d{1,4}", t):  # phone/date, hisaab nahi
+        return None
+    if not t or not _CALC_OK.match(t.replace("*", "x")) or not re.search(r"\d\s*[-+*/%x]|\*\*", t) or len(t) > 80:
+        return None
+    ops = {ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul, ast.Div: op.truediv, ast.Mod: op.mod, ast.Pow: op.pow,
+           ast.USub: op.neg, ast.UAdd: op.pos}
+
+    def ev(n, d=0):
+        if d > 12:
+            raise ValueError
+        if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)):
+            return n.value
+        if isinstance(n, ast.BinOp) and type(n.op) in ops:
+            a, b = ev(n.left, d + 1), ev(n.right, d + 1)
+            if isinstance(n.op, ast.Pow) and (abs(b) > 100 or abs(a) > 1e6):
+                raise ValueError
+            return ops[type(n.op)](a, b)
+        if isinstance(n, ast.UnaryOp) and type(n.op) in ops:
+            return ops[type(n.op)](ev(n.operand, d + 1))
+        raise ValueError
+    try:
+        v = ev(ast.parse(t, mode="eval").body)
+    except (ValueError, SyntaxError, ZeroDivisionError, OverflowError, RecursionError):
+        return None
+    if isinstance(v, float):
+        v = round(v, 10)
+        v = int(v) if v == int(v) and abs(v) < 1e15 else v
+    return f"{re.sub(r'\\s+', ' ', t.replace('**', '^'))} = {v}"
+
+
 def smalltalk(text: str, model: Model) -> str | None:
     """Sirf choti, saaf baat-cheet (greeting/thanks...) par jawab; asli sawal ko kabhi nahi pakarta."""
     t = re.sub(r"[!?.,؟،۔:;~\"'`]+$", "", text.strip().lower())
     t = re.sub(r"\s+", " ", re.sub(r"[!?.,؟،۔]+", " ", t)).strip()
-    if not t or len(t) > 60 or len(t.split()) > 8:
+    c = calc(text)
+    if c:
+        return c
+    if not t or len(t) > 90 or len(t.split()) > 12:
         return None
     for kind, rx in PATTERNS.items():
         if rx.match(t):

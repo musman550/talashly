@@ -12,7 +12,7 @@ STOP = set(
     "what who whom which when where why how do does did can could should would will about into over than then so "
     "i you he she we they me my your our their latest news today tell give show explain please pls kindly "
     "short brief briefly quick quickly simple simply way ways detail details describe summarize summarise summary overview basic basically "
-    "kya hai hain ka ki ke ko se mein par aur kaise kyun kon "
+    "kya kia hai hain ka ki ke ko se mein me par aur kaise kese kyun kyu kon kaun kisne kis kisko banaya banaye banaya banai batao batana bataiye bataein mujhe mujy mera meri mere hun hoon hu tha thi the hota hoti hote kitna kitni kitne kahan kahaan koi kuch bare baare liye lye ya wala wali wale roman urdu hindi english zaban "
     "کیا ہے ہیں کا کی کے کو سے میں پر اور کیسے کیوں "
     "और का की के को से में पर है हैं क्या "
     "и в во не на что это как для по из "
@@ -21,6 +21,7 @@ STOP = set(
     "el los las una y es por con para que".split()
 )
 WORD = re.compile(r"[\w'\-]+", re.UNICODE)
+CJK_PART = re.compile(r"是什么|是谁|什么是|什么|怎么样|怎么|吗|呢|的")
 CJK_RUN = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯]+")
 # Latin/Urdu/Hindi punctuation ke baad space zaroori (warna robots.txt, 3.14, file.py toot jate hain);
 # CJK full-width punctuation ke baad space hoti hi nahi.
@@ -48,6 +49,7 @@ def detect_script(text: str) -> str:
 
 
 def terms(q: str) -> list[str]:
+    q = CJK_PART.sub(" ", q)  # CJK sawali zarre
     q = CJK_RUN.sub(lambda m: f" {m.group(0)} ", q)  # "使用Python开发" -> "使用", "Python", "开发"
     ws = [w.lower().strip("'-") for w in WORD.findall(q)]
     keep = [w for w in ws if w and w not in STOP and (len(w) > 1 or CJK_RUN.fullmatch(w))]
@@ -100,7 +102,7 @@ class Searcher:
 
     def _run_cjk(self, query: str, limit: int):
         rows, seen = [], set()
-        for run in CJK_RUN.findall(query):
+        for run in CJK_RUN.findall(CJK_PART.sub(" ", query)):
             if len(run) >= 3 and self.db.has_trigram:
                 sql = _SELECT.format(rank="bm25(chunks_tri)", tbl="chunks_tri") + \
                     " WHERE chunks_tri MATCH ? ORDER BY rank LIMIT ?"

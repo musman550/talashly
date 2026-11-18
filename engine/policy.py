@@ -20,6 +20,7 @@ HARM = re.compile(
     r"(bomb|explosive|nerve agent|sarin|ricin|anthrax|napalm|thermite|methamphetamine|meth|fentanyl)(?!\w)(?!\s+calorimeter)|"
     r"(write|create|build|code|make|develop) (me )?(a |an |some )?(working |simple )?"
     r"(ransomware|malware|keylogger|botnet|ddos (tool|script|attack)|computer virus|trojan|rootkit)|"
+    r"(hack|crack|break into|steal|spy on|get into) (my |his |her |their |someone'?s |a |an )?(neighbou?r'?s?|friend'?s|girlfriend'?s|boyfriend'?s|wife'?s|husband'?s|ex'?s|other|someone'?s|victim'?s)? ?(wi-?fi|wifi|password|account|whatsapp|instagram|facebook|phone|email)|"
     r"child\W{0,3}(porn|sex video|nude)|\bcsam\b|"
     r"bomb (kaise|kese|kaisay) (banate|banaye|banaen|banao|banta|banti)|"
     r"بم کیسے بنا)", re.I)
