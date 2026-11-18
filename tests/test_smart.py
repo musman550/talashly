@@ -30,7 +30,7 @@ def test_website_request_without_llm_builds_tailwind_page(tmp_path):
 def test_custom_task_without_llm_is_honest_not_random_text(tmp_path):
     cfg, app = build(tmp_path)
     with TestClient(app) as c:
-        _, evs = chat(c, "write a poem about autumn rain")
+        _, evs = chat(c, "write an email to my landlord about autumn rain")
         assert ev(evs, "done")[0]["mode"] == "needllm"
         assert "security" not in "".join(ev(evs, "token")).lower()
 
@@ -264,3 +264,17 @@ def test_policy_wifi_and_roman_stopwords():
     assert policy_check("how do I secure my wifi") is None
     assert terms("python kisne banaya?") == ["python"]
     assert terms("北京是什么") == ["北京"]
+
+
+def test_compare_and_poem_skills_without_llm(tmp_path):
+    from engine.skills import compare_parts, poem
+    assert compare_parts("python aur java mein kya farq hai") == ("python", "java")
+    assert compare_parts("what is python") is None
+    assert "Rain" in poem("write a poem about rain") and poem("what is a poem") is None
+    cfg, app = build(tmp_path)
+    with TestClient(app) as c:
+        _, evs = chat(c, "compare crawlers and asyncio")
+        text = "".join(ev(evs, "token"))
+        assert ev(evs, "done")[0]["mode"] == "skill" and "crawlers vs asyncio" in text
+        _, evs = chat(c, "write a poem about rain")
+        assert ev(evs, "done")[0]["mode"] == "skill"

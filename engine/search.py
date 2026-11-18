@@ -12,6 +12,7 @@ STOP = set(
     "what who whom which when where why how do does did can could should would will about into over than then so "
     "i you he she we they me my your our their latest news today tell give show explain please pls kindly "
     "short brief briefly quick quickly simple simply way ways detail details describe summarize summarise summary overview basic basically "
+    "big large size tall long old far many much kab hua describe described "
     "kya kia hai hain ka ki ke ko se mein me par aur kaise kese kyun kyu kon kaun kisne kis kisko banaya banaye banaya banai batao batana bataiye bataein mujhe mujy mera meri mere hun hoon hu tha thi the hota hoti hote kitna kitni kitne kahan kahaan koi kuch bare baare liye lye ya wala wali wale roman urdu hindi english zaban "
     "کیا ہے ہیں کا کی کے کو سے میں پر اور کیسے کیوں "
     "और का की के को से में पर है हैं क्या "

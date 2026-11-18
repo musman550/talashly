@@ -18,6 +18,7 @@ from .lang import reply_lang, tr
 from .models import Model, get_model
 from .builder import build_site, wants_site
 from .llm import stream_chat
+from .skills import compare, poem
 from .policy import CREATIVE, intent, is_unclear, policy_check, strip_cites, wants_sources
 from .search import Searcher, coverage, terms
 
@@ -510,6 +511,13 @@ class Chat:
             return
         if model.deep:
             return  # Deep: hamesha research + sources
+        if not ready:
+            for fn in (lambda: poem(text), lambda: compare(text, self.searcher)):
+                got = fn()
+                if got:
+                    yield "token", got
+                    yield "done", {"mode": "skill"}
+                    return
         eq = contextualize(text, prev_user)
         try:
             weak = coverage(eq, self.searcher.search_many([eq], 8)) < 0.6
