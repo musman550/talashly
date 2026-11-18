@@ -39,6 +39,7 @@ def wants_sources(text: str, model: Model) -> bool:
 
 
 def policy_check(text: str) -> str | None:
+    text = re.sub(r"\s+", " ", text)  # "write   me" (zyada spaces) se bachna mumkin na ho
     """'support' (khud ko nuqsan ka zikr), 'refuse' (nuqsan-deh madad), warna None."""
     if SELF_HARM.search(text):
         return "support"

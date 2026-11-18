@@ -18,6 +18,25 @@ services:
       - ./config.toml:/app/config.toml:ro
       - ./seeds.toml:/app/seeds.toml:ro
 
+  # Autopilot: 24/7 khud sawal banata, search service se poochta, yaad rakhta, report likhta (data/autopilot/report.md).
+  # Chat/API/tokens ki zaroorat nahi. Band karna ho: docker compose stop autopilot
+  autopilot:
+    image: ghcr.io/musman550/talashly:latest
+    build: .
+    restart: unless-stopped
+    mem_limit: 150m
+    init: true
+    depends_on: [search]
+    command: ["python", "-m", "engine", "autopilot", "--url", "http://search:8000"]
+    environment:
+      - AP_PER_MIN=${AP_PER_MIN:-6}
+      - AP_LLM_URL=${AP_LLM_URL:-}
+      - AP_LLM_KEY=${AP_LLM_KEY:-}
+      - AP_LLM_MODEL=${AP_LLM_MODEL:-}
+    volumes:
+      - ./data:/app/data
+      - ./config.toml:/app/config.toml:ro
+
   # Apna free, open-source AI writer (koi API/key nahi): sirf 6 GB+ RAM wali VM par. deploy/enable-llm.sh isay on karta hai.
   llm:
     profiles: ["llm"]

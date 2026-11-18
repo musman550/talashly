@@ -49,6 +49,29 @@ def preflight_db(cfg: dict) -> str:
     return "fresh"
 
 
+def cmd_autopilot(a) -> int:
+    from pathlib import Path
+
+    from .autopilot import run
+    from .config import load_config
+
+    cfg = load_config()
+    data = cfg["_data_dir"]
+    db_path = cfg["general"]["db_path"]
+    key = a.key
+    keyf = Path(data) / "autopilot" / "key.txt"
+    if not key and not a.report and not a.local and keyf.exists():
+        key = keyf.read_text().strip()
+    if not key and not a.report and not a.local and a.url and os.path.exists(db_path):
+        from .db import DB
+        from .users import create_user
+        key = create_user(DB(db_path), "autopilot-bot", "admin", 600)  # roz ki quota nahi (server isay chhoot deta hai)
+        keyf.parent.mkdir(parents=True, exist_ok=True)
+        keyf.write_text(key)
+    url = a.url or f"http://127.0.0.1:{cfg['server']['port']}"
+    return asyncio.run(run(url, data, db_path, key or None, a.max_cases, a.per_min, local=a.local, once_report=a.report))
+
+
 def cmd_restore(a) -> int:
     from .config import load_config
     from .db import restore_latest_backup
@@ -310,6 +333,14 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--out", default="")
     s.add_argument("--min-up", type=int, default=3)
     s.set_defaults(fn=cmd_export_feedback)
+    s = sub.add_parser("autopilot", help="khud sawal banao, test karo, yaad rakho, report likho (hamesha)")
+    s.add_argument("--url", default="")
+    s.add_argument("--key", default=os.environ.get("AP_KEY", ""))
+    s.add_argument("--max-cases", type=int, default=0, help="0 = hamesha")
+    s.add_argument("--per-min", type=float, default=float(os.environ.get("AP_PER_MIN", "12")))
+    s.add_argument("--local", action="store_true", help="is machine ke app ko seedha (bina network) test karo")
+    s.add_argument("--report", action="store_true")
+    s.set_defaults(fn=cmd_autopilot)
     s = sub.add_parser("doctor", help="system check")
     s.set_defaults(fn=cmd_doctor)
     a = ap.parse_args(argv)

@@ -57,3 +57,11 @@ License: MIT.
 
 ## No third-party APIs
 Outbound traffic is only: your crawler fetching public pages (polite, robots.txt), live research on the public sites in `sources.toml`, and the optional LLM URL *you* configure (your own llama.cpp). There are no API keys for search or AI, so no vendor quota can block you. Public sites can still rate-limit the crawler; it backs off automatically.
+
+
+## Autopilot (khud test + khud mushkil hota level)
+
+`python -m engine autopilot` (Docker mein `autopilot` service 24/7 chalti hai; GitHub Actions `autopilot` har ghante live site ko test karta hai).
+Sawal index ke asli text se khud bante hain; har level pichle se mushkil (typos, filler, mixed language, compare, follow-up, injection...).
+95% pass hone par level badhta hai. Yaad `data/autopilot/memory.db`, report `data/autopilot/report.md` (admin: `GET /admin/autopilot`),
+fail sawal `failures.jsonl` (training/fixing ke liye). Optional LLM sawal-saaz: `AP_LLM_URL`, `AP_LLM_KEY`, `AP_LLM_MODEL` (koi bhi OpenAI-compatible).

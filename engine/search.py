@@ -12,6 +12,8 @@ STOP = set(
     "what who whom which when where why how do does did can could should would will about into over than then so "
     "i you he she we they me my your our their latest news today tell give show explain please pls kindly "
     "short brief briefly quick quickly simple simply way ways detail details describe summarize summarise summary overview basic basically "
+    "acha bata dein dena jaldi zara bhai yaar ji sir samjhao samjha asap thanks thinking something earlier honestly wanted ask okay quick question hey today just really actually "
+    "more else further also another other iske iska iski isko uske uska uski usko wo woh ye yeh batao baato bataiye\n    "
     "big large size tall long old far many much kab hua describe described "
     "kya kia hai hain ka ki ke ko se mein me par aur kaise kese kyun kyu kon kaun kisne kis kisko banaya banaye banaya banai batao batana bataiye bataein mujhe mujy mera meri mere hun hoon hu tha thi the hota hoti hote kitna kitni kitne kahan kahaan koi kuch bare baare liye lye ya wala wali wale roman urdu hindi english zaban "
     "کیا ہے ہیں کا کی کے کو سے میں پر اور کیسے کیوں "
@@ -49,11 +51,35 @@ def detect_script(text: str) -> str:
     return best
 
 
+_STOP_BY_LEN: dict[int, list[str]] = {}
+for _w in STOP:
+    if len(_w) >= 5 and _w.isascii():
+        _STOP_BY_LEN.setdefault(len(_w), []).append(_w)
+
+
+def _near(a: str, b: str) -> bool:
+    """Ek galti ka farq (ulti jagah / ek harf kam-zyada / badla hua)."""
+    if a == b:
+        return True
+    if len(a) == len(b):
+        d = [i for i in range(len(a)) if a[i] != b[i]]
+        return len(d) == 1 or (len(d) == 2 and d[1] == d[0] + 1 and a[d[0]] == b[d[1]] and a[d[1]] == b[d[0]])
+    return False
+
+
+def fuzzy_stop(w: str) -> bool:
+    """Filler lafz mein typo ('watned', 'thniking', 'explian') bhi filler hi hai - warna wo 'nayi cheez' ban kar jawab bigaarta hai."""
+    if len(w) < 5 or not w.isascii() or w in STOP:
+        return w in STOP
+    return any(_near(w, c) for L in (len(w) - 1, len(w), len(w) + 1) for c in _STOP_BY_LEN.get(L, ()) if c[0] == w[0] and abs(len(c) - len(w)) == 0)
+
+
 def terms(q: str) -> list[str]:
     q = CJK_PART.sub(" ", q)  # CJK sawali zarre
     q = CJK_RUN.sub(lambda m: f" {m.group(0)} ", q)  # "使用Python开发" -> "使用", "Python", "开发"
     ws = [w.lower().strip("'-") for w in WORD.findall(q)]
-    keep = [w for w in ws if w and w not in STOP and (len(w) > 1 or CJK_RUN.fullmatch(w))]
+    fz = len(ws) >= 7  # lambi/gol-matol baat mein hi filler ke typo maaf (chhote sawal mein 'otter' jaisa asli lafz na girey)
+    keep = [w for w in ws if w and w not in STOP and not (fz and fuzzy_stop(w)) and (len(w) > 1 or CJK_RUN.fullmatch(w))]
     return keep or [w for w in ws if w]
 
 

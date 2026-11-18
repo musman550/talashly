@@ -165,6 +165,8 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
         return f"ip:{request.client.host if request.client else '?'}"
 
     def _quota_limit(u: dict) -> int:
+        if u["id"] and u["role"] == "admin" and str(u.get("name", "")).startswith("autopilot"):
+            return 0  # apna test-bot (sirf admin bana sakta hai): unlimited
         return int(cfg["chat"]["daily_quota_key" if u["id"] else "daily_quota_anon"])
 
     def _usage_today(owner: str) -> int:
@@ -294,6 +296,11 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     @app.get("/admin/brain-log")
     async def admin_log(limit: int = 50, a: dict = Depends(admin_user)):
         return [dict(r) for r in db.q("SELECT at,kind,detail FROM brain_log ORDER BY id DESC LIMIT ?", (min(limit, 500),))]
+
+    @app.get("/admin/autopilot")
+    async def admin_autopilot(a: dict = Depends(admin_user)):
+        f = Path(cfg["_data_dir"]) / "autopilot" / "report.md"
+        return PlainTextResponse(f.read_text(encoding="utf-8") if f.exists() else "Autopilot abhi chala nahi.")
 
     @app.get("/admin/gaps")
     async def admin_gaps(a: dict = Depends(admin_user)):

@@ -1,0 +1,42 @@
+name: autopilot
+# Har ghante live site par naye, pehle se mushkil sawal bhejta, jawab jaanchta aur report banata hai. Free, Claude/chat ki zaroorat nahi.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: autopilot
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - uses: actions/cache@v4
+        with:
+          path: data/autopilot
+          key: autopilot-${{ github.run_id }}
+          restore-keys: autopilot-
+      - name: Autopilot (150 sawal)
+        env:
+          AP_KEY: ${{ secrets.AUTOPILOT_KEY }}
+        run: python -m engine autopilot --url "${{ vars.AUTOPILOT_URL || 'http://137.23.39.13:8000' }}" --max-cases 150 --per-min 15 | tail -40 | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autopilot-report
+          path: data/autopilot/report.*
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autopilot-failures
+          path: data/autopilot/failures.jsonl
+          retention-days: 14
+          if-no-files-found: ignore

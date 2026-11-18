@@ -13,12 +13,43 @@ POEM = re.compile(r"\b(poem|poetry|nazm|shayari|ghazal|haiku|kavita)\b", re.I)
 ON = re.compile(r"\b(?:about|on|for|par|pe|ke bare mein|per)\s+(.+?)\s*[?.!]*$|^(?:.*?)\b(?:poem|nazm|shayari|haiku)\s+(?:of|on)?\s*(.+?)\s*[?.!]*$", re.I)
 
 
+FILL = {"acha", "ji", "yaar", "bhai", "sir", "mujhe", "mujy", "batao", "bata", "dein", "dena", "samjhao", "please", "pls", "jaldi", "asap",
+        "thanks", "short", "in", "okay", "so", "hey", "can", "you", "tell", "me", "kindly"}
+
+
+def _trim(x: str) -> str:
+    ws = re.sub(r"[^\w\s\u0600-\u06FF-]", " ", x).split()
+    while ws and ws[0].lower() in FILL:
+        ws.pop(0)
+    while ws and ws[-1].lower() in FILL:
+        ws.pop()
+    return " ".join(ws)
+
+
+def _fix_cmd(text: str) -> str:
+    """'comapre', 'difefrence', 'betwen' jaise command-lafz ke typo theek karo (sirf yehi 3 lafz)."""
+    from .search import _near
+
+    out = []
+    for w in text.split(" "):
+        lw = re.sub(r"\W", "", w).lower()
+        for good in ("compare", "difference", "between"):
+            if lw != good and abs(len(lw) - len(good)) <= 1 and lw[:1] == good[:1] and (
+                    _near(lw, good) or sorted(lw) == sorted(good)):
+                w = good
+                break
+        out.append(w)
+    return " ".join(out)
+
+
 def compare_parts(text: str) -> tuple[str, str] | None:
+    text = _fix_cmd(re.sub(r"\s+", " ", text).strip())
+    text = re.sub(r"^.*?(?=\b(?:compare|difference(?:s)? between)\b)", "", text, flags=re.I) if re.search(r"\b(compare|differences? between)\b", text, re.I) else _trim(text)
     m = CMP.match(text)
     if not m:
         return None
     g = [x for x in m.groups() if x]
-    a, b = (g[0].strip(" \"'"), g[1].strip(" \"'")) if len(g) >= 2 else (None, None)
+    a, b = (_trim(g[0]), _trim(g[1])) if len(g) >= 2 else (None, None)
     if not a or not b or len(a) > 60 or len(b) > 60 or a.lower() == b.lower():
         return None
     return a, b
