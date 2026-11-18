@@ -2,15 +2,23 @@
 $ErrorActionPreference = "Stop"
 $ip = "137.23.39.13"
 $user = "ubuntu"
-$src = Get-ChildItem -Path "$HOME\Downloads","$HOME\Desktop","$HOME\Documents","$HOME\.ssh" -File -ErrorAction SilentlyContinue |
-  Where-Object { $_.Name -like "ssh-key-*" -or $_.Extension -eq ".key" } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if (-not $src) { Write-Host "Key file nahi mili (ssh-key-....key). Usay Downloads mein rakhein aur dobara chalayein." -ForegroundColor Red; return }
+$cands = Get-ChildItem -Path "$HOME\Downloads","$HOME\Desktop","$HOME\Documents","$HOME\.ssh" -File -Recurse -Depth 2 -ErrorAction SilentlyContinue |
+  Where-Object { $_.Extension -ne ".pub" -and ($_.Name -like "ssh-key-*" -or $_.Extension -in ".key",".pem") -and $_.Length -lt 20000 } |
+  Where-Object { (Get-Content $_.FullName -TotalCount 1 -ErrorAction SilentlyContinue) -like "-----BEGIN*" } |
+  Sort-Object LastWriteTime -Descending
+if (-not $cands) { Write-Host "Private key nahi mili (ssh-key-....key, .pub nahi). Usay Downloads mein rakhein." -ForegroundColor Red; return }
 New-Item -ItemType Directory -Force "$HOME\.ssh" | Out-Null
-$key = "$HOME\.ssh\talashly.key"
-Copy-Item $src.FullName $key -Force
-icacls $key /inheritance:r | Out-Null
-icacls $key /grant:r "$($env:USERNAME):(R)" | Out-Null
-Write-Host "Key mili: $($src.Name)" -ForegroundColor Green
+$key = $null
+foreach ($c in $cands) {
+  $k = "$HOME\.ssh\talashly.key"
+  Copy-Item $c.FullName $k -Force
+  icacls $k /inheritance:r | Out-Null
+  icacls $k /grant:r "$($env:USERNAME):(R)" | Out-Null
+  ssh -i $k -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 "$user@$ip" "echo ok" 2>$null | Out-Null
+  if ($LASTEXITCODE -eq 0) { $key = $k; Write-Host "Sahi key mili: $($c.Name)" -ForegroundColor Green; break }
+  Write-Host "Ye key VM se match nahi hui: $($c.Name)" -ForegroundColor Yellow
+}
+if (-not $key) { Write-Host "Koi key VM se match nahi hui. Oracle Console mein VM ki key (ya VM ka IP) check karein." -ForegroundColor Red; return }
 $remote = @'
 set -e
 curl -fsSL https://raw.githubusercontent.com/musman550/talashly/main/deploy/oracle-setup.sh | bash
