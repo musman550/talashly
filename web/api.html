@@ -66,5 +66,5 @@ console.log((await r.json()).choices[0].message.content);</code></pre>
 <h2>Limits and errors</h2>
 <p>Each key has a per-minute rate limit and a daily quota so that one user cannot overload the server. Errors use the OpenAI shape: <code>{"error":{"message":"...","type":"...","code":"..."}}</code>. Status <code>401</code> bad or missing key, <code>404</code> unknown model, <code>429</code> rate limit or quota, <code>503</code> server busy (retry shortly).</p>
 <p>Token counts in <code>usage</code> are approximate word counts. A <code>Sources:</code> list is appended only for <code>mus-7.01-deep</code> or when the question asks for sources.</p>
-<footer>Talashly is open source (MIT). Answers can be wrong: check the cited sources.</footer>
+<footer>Talashly is open source (MIT). Answers can be wrong: double-check anything important.</footer>
 </main></div></body></html>

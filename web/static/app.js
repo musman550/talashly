@@ -80,7 +80,12 @@
   // ---------- thread
   const msgs = $("msgs"), thread = $("thread");
   function scroll() { if (S.stick) thread.scrollTop = thread.scrollHeight; }
-  thread.addEventListener("scroll", () => { S.stick = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80; });
+  let lastTop = 0;  // sirf user ke UPAR scroll karne par auto-scroll band; lamba content aane se nahi
+  thread.addEventListener("scroll", () => {
+    const gap = thread.scrollHeight - thread.scrollTop - thread.clientHeight;
+    if (thread.scrollTop < lastTop - 2) S.stick = gap < 80; else if (gap < 80) S.stick = true;
+    lastTop = thread.scrollTop;
+  });
   function addUser(text) {
     const m = el("div", "msg user"); const b = el("div", "bubble", text); b.dir = "auto"; m.appendChild(b);
     msgs.appendChild(m); $("welcome").hidden = true; scroll();
@@ -169,6 +174,7 @@
       b.body.classList.remove("cursor"); b.status.textContent = stopped ? "Stopped." : "";
       if (S.priv && !failed && b.text) { S.hist.push({ role: "user", content: text.slice(0, 4000) }, { role: "assistant", content: b.text.slice(0, 4000) }); }
       footer(b, done, failed && !stopped ? text : null);
+      scroll();
       S.busy = false; S.ctl = null; $("send").textContent = "Send"; $("send").type = "submit";
       loadConvs(); $("in").focus();
     }

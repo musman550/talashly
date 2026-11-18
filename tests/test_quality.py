@@ -151,3 +151,23 @@ def test_chromium_user_flow_has_no_junk_and_builds_website(srv):
         t = say("what is ai with sources")
         assert page.locator(".srcs, .src").count() > 0                           # maangne par sources aate hain
         b.close()
+
+
+def test_chat_stays_scrolled_to_bottom_after_long_answer(srv):
+    pw = pytest.importorskip("playwright.sync_api")
+    url, cfg, app = srv
+    with pw.sync_playwright() as p:
+        b = p.chromium.launch()
+        page = b.new_context(**p.devices["iPhone 13"]).new_page()
+        page.goto(url)
+        page.wait_for_selector("#model option", state="attached")
+        for q in ("who are you", "make a website for Noor Bakery", "hy"):
+            n = page.locator(".msg.bot").count()
+            page.fill("#in", q)
+            page.press("#in", "Enter")
+            page.wait_for_function("n => document.querySelectorAll('.msg.bot').length > n", arg=n)
+            page.wait_for_selector("#send:has-text('Send')")
+            page.wait_for_timeout(250)
+            gap = page.evaluate("(() => { const t = document.querySelector('#thread'); return t.scrollHeight - t.scrollTop - t.clientHeight; })()")
+            assert gap <= 40, (q, gap)
+        b.close()
