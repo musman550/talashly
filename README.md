@@ -54,3 +54,6 @@ License: MIT.
 - **Private by default**: the browser keeps the conversation in memory only and sends the last few turns; the server saves no chat text. Refresh = clean slate. (`[chat] private_default = false` brings back saved history.) Only unanswered questions are noted anonymously so the crawler can learn what is missing.
 - **Website builder** (no AI key needed): "make a website for Noor Bakery" returns a complete responsive Tailwind CSS page.
 - **Optional AI writer** (any OpenAI-compatible provider, e.g. Groq, Gemini, OpenRouter, or your own llama.cpp): set `SS_LLM_URL`, `SS_LLM_KEY`, `SS_LLM_MODEL` (and `SS_LLM_PATH` if the path is not `/v1/chat/completions`) in `.env`. Then tasks (write, code, translate...) and questions the index cannot answer go to the AI writer; Deep model still uses research + sources.
+
+## No third-party APIs
+Outbound traffic is only: your crawler fetching public pages (polite, robots.txt), live research on the public sites in `sources.toml`, and the optional LLM URL *you* configure (your own llama.cpp). There are no API keys for search or AI, so no vendor quota can block you. Public sites can still rate-limit the crawler; it backs off automatically.

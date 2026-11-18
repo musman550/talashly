@@ -10,7 +10,8 @@ from .db import DB, cjk_ratio
 STOP = set(
     "a an the and or of to in on for with is are was were be been being it its this that these those as at by from "
     "what who whom which when where why how do does did can could should would will about into over than then so "
-    "i you he she we they me my your our their latest news today tell give show explain please "
+    "i you he she we they me my your our their latest news today tell give show explain please pls kindly "
+    "short brief briefly quick quickly simple simply way ways detail details describe summarize summarise summary overview basic basically "
     "kya hai hain ka ki ke ko se mein par aur kaise kyun kon "
     "کیا ہے ہیں کا کی کے کو سے میں پر اور کیسے کیوں "
     "और का की के को से में पर है हैं क्या "
@@ -233,13 +234,26 @@ def sentences(text: str) -> list[str]:
     return out
 
 
+def match_terms(ts: list[str], low: str) -> int:
+    """Sawal ke kitne alfaaz text mein MILTE hain: poora lafz (ya lambe lafz ka shuru: crawler~crawlers).
+    Chhote alfaaz ('ai') kisi doosre lafz ke andar nahi ginte ('said', 'again'). CJK mein spaces nahi hote: wahan substring."""
+    words = set(WORD.findall(low))
+    n = 0
+    for t in ts:
+        if CJK_RUN.fullmatch(t):
+            n += t in low
+        elif t in words or (len(t) > 3 and any(w.startswith(t) for w in words)):
+            n += 1
+    return n
+
+
 def coverage(query: str, hits: list[Hit], top: int = 3) -> float:
     """Query ke kitne alfaaz top results mein milte hain (0..1). Kam coverage = index mein kami."""
     ts = terms(query)
     if not ts or not hits:
         return 0.0
     blob = " ".join(p.lower() for h in hits[:top] for p in h.passages) + " " + " ".join(h.title.lower() for h in hits[:top])
-    return sum(1 for t in ts if t in blob) / len(ts)
+    return match_terms(ts, blob) / len(ts)
 
 
 def build_answer(query: str, hits: list[Hit], max_sentences: int = 5) -> dict:
@@ -247,13 +261,17 @@ def build_answer(query: str, hits: list[Hit], max_sentences: int = 5) -> dict:
     ts = terms(query)
     if not hits:
         return {"answer": "", "citations": [], "confident": False}
+    # jumla tab hi jawab ban sakta hai jab sawal ke zyada tar asli alfaaz usmein hon (ek aam lafz kafi nahi):
+    need = 1 if len(ts) <= 1 else max(2, (len(ts) + 1) // 2)
     cands: list[tuple[float, str, int]] = []
     for i, h in enumerate(hits[:6], 1):
         for p in h.passages:
             for s in sentences(p):
                 low = s.lower()
-                overlap = sum(1 for t in ts if t in low)
-                if overlap == 0:
+                if BOILER.search(low):
+                    continue  # legal/cookie/menu wali bekaar lines jawab nahi banti
+                overlap = match_terms(ts, low)
+                if overlap < need:
                     continue
                 cands.append((overlap / max(1, len(ts)) + 0.05 * (7 - i), s, i))
     cands.sort(key=lambda x: x[0], reverse=True)
@@ -274,6 +292,12 @@ def build_answer(query: str, hits: list[Hit], max_sentences: int = 5) -> dict:
     cites = [{"n": order[i], "title": hits[i - 1].title, "url": hits[i - 1].url, "domain": hits[i - 1].domain}
              for i in sorted(used)]
     return {"answer": text, "citations": cites, "confident": len(chosen) >= 2}
+
+
+BOILER = re.compile(
+    r"(we undertake no obligation|reserve the right|terms of (service|use)|privacy policy|cookie|all rights reserved|"
+    r"subscribe|sign up|log ?in|click here|disclaimer|not liable|no warrant|without limitation|third[- ]party websites|"
+    r"advertis|newsletter|copyright|\bcookies?\b)", re.I)
 
 
 def llm_prompt(query: str, hits: list[Hit]) -> str:
