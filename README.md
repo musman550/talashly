@@ -1,5 +1,10 @@
 # Talashly
 
+**A free, self-hosted AI answer engine with its own crawler, its own index and cited answers in many languages.**
+No third-party search or AI APIs. Chat UI, five free `MUS 7.01` models, and an OpenAI-compatible API with free keys.
+
+Website: https://musman550.github.io/talashly/ · Hosting guide: [HOSTING.md](HOSTING.md)
+
 <!-- AUTO-SEO:START -->
 > **Summary:** Talashly is a self-hosted AI answer engine with its own crawler and index, supporting multilingual queries and offering a chat UI.
 
@@ -22,12 +27,6 @@ To use the Talashly API, you can generate a key with a POST request to /api/keys
 
 <sub>Generated automatically from this repository's own content. [How this works](https://musman550.github.io/github-traffic-analytics-dashboard/optimizer/)</sub>
 <!-- AUTO-SEO:END -->
-
-
-**A free, self-hosted AI answer engine with its own crawler, its own index and cited answers in many languages.**
-No third-party search or AI APIs. Chat UI, five free `MUS 7.01` models, and an OpenAI-compatible API with free keys.
-
-Website: https://musman550.github.io/talashly/ · Hosting guide: [HOSTING.md](HOSTING.md)
 
 ## What you get
 - **Chat website** (Claude-style): streaming answers, conversation history, model picker, dark/light, mobile-ready.
