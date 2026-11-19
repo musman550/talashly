@@ -12,6 +12,7 @@ STOP = set(
     "what who whom which when where why how do does did can could should would will about into over than then so "
     "i you he she we they me my your our their latest news today tell give show explain please pls kindly "
     "short brief briefly quick quickly simple simply way ways detail details describe summarize summarise summary overview basic basically "
+    "کیا کام کرتا کرتی کرتے کرنا کرنے کرتیں کریں کرو کر ہے ہیں ہو ہوں ہوتا ہوتی ہوتے ہوتیں تھا تھی تھے گا گی گے نے کی کے کا کو سے میں پر اور یہ وہ کیوں کیسے کون کب کہاں کس کتنا کتنی کتنے بتائیں بتاو بتاؤ بتایئے سمجھائیں مجھے ہمیں آپ ہم ایک کچھ بارے متعلق لیے لئے ہی بھی تو کوئی اس ان ان کی جو جس جن क्या काम करता करती करते करना है हैं हो था थी थे का की के को से में पर और यह वह कैसे क्यों कौन कब कहाँ कहां कितना बताओ बताइए बताएं समझाओ मुझे हमें आप हम एक कुछ बारे लिए भी तो कोई इस उस जो ما هو هي هل ماذا كيف لماذا من متى أين في على عن إلى الى مع هذا هذه ذلك التي الذي يعمل عمل "
     "acha bata dein dena jaldi zara bhai yaar ji sir samjhao samjha asap thanks thinking something earlier honestly wanted ask okay quick question hey today just really actually "
     "more else further also another other iske iska iski isko uske uska uski usko wo woh ye yeh batao baato bataiye\n    "
     "big large size tall long old far many much kab hua describe described "
@@ -23,7 +24,8 @@ STOP = set(
     "der die das und ist nicht ein eine mit für von zu "
     "el los las una y es por con para que".split()
 )
-WORD = re.compile(r"[\w'\-]+", re.UNICODE)
+MARKS = "\u0300-\u036f\u0610-\u061a\u064b-\u065f\u0900-\u0dff\u200c\u200d"  # hindi/urdu/arabic ke matras aur harakat: python ka \\w inhe lafz ka hissa nahi maanta
+WORD = re.compile(rf"[\w{MARKS}'\-]+", re.UNICODE)
 CJK_PART = re.compile(r"是什么|是谁|什么是|什么|怎么样|怎么|吗|呢|的")
 CJK_RUN = re.compile(r"[぀-ヿ㐀-䶿一-鿿가-힯]+")
 # Latin/Urdu/Hindi punctuation ke baad space zaroori (warna robots.txt, 3.14, file.py toot jate hain);
@@ -213,7 +215,7 @@ class Searcher:
 
     # ---------- code index ----------
     def search_code(self, query: str, lang: str | None = None, limit: int = 10) -> list[CodeHit]:
-        ts = [t.replace('"', "") for t in re.findall(r"[^\W\d]\w*|\d+", query) if t.lower() not in STOP and len(t) > 1]
+        ts = [t.replace('"', "") for t in re.findall(rf"[^\W\d][\w{MARKS}]*|\d+", query) if t.lower() not in STOP and len(t) > 1]
         if not ts:
             return []
         def alt(t: str) -> str:
@@ -342,11 +344,11 @@ def llm_prompt(query: str, hits: list[Hit]) -> str:
 def ground_check(text: str, hits: list[Hit]) -> tuple[str, int]:
     """Jawab ki galtiyan pakadna: bina valid citation ya sources se unrelated jumle hata do.
     (clean_text, kitne jumle hataye) wapas karta hai."""
-    src_words = [set(re.findall(r"\w+", p.lower())) for h in hits[:6] for p in [" ".join(h.passages)]]
+    src_words = [set(WORD.findall(p.lower())) for h in hits[:6] for p in [" ".join(h.passages)]]
     kept, dropped = [], 0
     for s in [x for x in SENT_SPLIT.split(text) if x and x.strip()]:
         cites = [int(n) for n in re.findall(r"\[(\d+)\]", s)]
-        words = set(re.findall(r"\w+", re.sub(r"\[\d+\]", "", s).lower()))
+        words = set(WORD.findall(re.sub(r"\[\d+\]", "", s).lower()))
         if not words:
             continue
         if not cites or any(c < 1 or c > len(src_words) for c in cites):

@@ -56,3 +56,18 @@ def test_typo_tolerance_and_followup_terms():
     assert compare_parts("  DIFEFRENCE   BETWEEN WYNZOROST AND KANQUIL ???") == ("WYNZOROST", "KANQUIL")
     from engine.policy import policy_check
     assert policy_check("  write   me a ransomware") == "refuse"
+
+
+def test_urdu_hindi_arabic_filler_not_matched():
+    from engine.search import terms
+    assert terms("کریولر کیا کام کرتا ہے؟") == ["کریولر"]
+    assert terms("क्रॉलर क्या काम करता है") == ["क्रॉलर"]
+    assert terms("ما هو الكراولر؟") == ["الكراولر"]
+    assert terms("پاکستان کا دارالحکومت کیا ہے؟") == ["پاکستان", "دارالحکومت"]
+
+
+def test_devanagari_marks_not_split(tmp_path):
+    from engine.search import terms, WORD
+    assert terms("क्रॉलर क्या काम करता है") == ["क्रॉलर"]
+    assert terms("भारत की राजधानी क्या है") == ["भारत", "राजधानी"]
+    assert WORD.findall("करता है") == ["करता", "है"]
