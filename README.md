@@ -5,6 +5,29 @@ No third-party search or AI APIs. Chat UI, five free `MUS 7.01` models, and an O
 
 Website: https://musman550.github.io/talashly/ · Hosting guide: [HOSTING.md](HOSTING.md)
 
+<!-- AUTO-SEO:START -->
+> **Summary:** Talashly is a self-hosted AI answer engine with its own crawler and index, supporting multilingual queries and offering a chat UI.
+
+**Keywords:** sqlite · self-hosted · openai-api · crawler · search-engine · multilingual · chat-ui · python
+
+### FAQ
+
+**How do I run Talashly on Windows?**  
+To run Talashly on Windows, first execute INSTALL.bat once, then run START.bat and open http://127.0.0.1:8000 in your browser.
+
+**What models does Talashly support?**  
+Talashly supports five free MUS 7.01 models: balanced, flash (fastest), deep (multi-step research), code (prioritizes code), and polyglot (non-English).
+
+**How do I use the Talashly API?**  
+To use the Talashly API, you can generate a key with a POST request to /api/keys and then use that key to make requests to the /v1/chat/completions endpoint.
+
+### Related projects
+- [talashly-monitor](https://github.com/musman550/talashly-monitor)
+- [Website](https://musfiraai.com)
+
+<sub>Generated automatically from this repository's own content. [How this works](https://musman550.github.io/github-traffic-analytics-dashboard/optimizer/)</sub>
+<!-- AUTO-SEO:END -->
+
 ## What you get
 - **Chat website** (Claude-style): streaming answers, conversation history, model picker, dark/light, mobile-ready.
 - **Own crawler**: robots.txt and crawl-delay aware, sitemaps, ETag, dedupe, adaptive recrawl, 24/7 or time windows.
