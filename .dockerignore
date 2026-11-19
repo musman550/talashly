@@ -1,0 +1,14 @@
+data
+.git
+.github
+.pytest_cache
+**/__pycache__
+*.pyc
+tests
+docs
+*.bat
+.env
+*.db
+*.db-wal
+*.db-shm
+*.gguf
