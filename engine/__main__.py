@@ -72,6 +72,20 @@ def cmd_autopilot(a) -> int:
     return asyncio.run(run(url, data, db_path, key or None, a.max_cases, a.per_min, local=a.local, once_report=a.report))
 
 
+def cmd_export_train(a) -> int:
+    import json as _json
+    from pathlib import Path
+
+    from .trainprep import export_passages
+
+    out = Path(a.out)
+    n = asyncio.run(export_passages(a.url, a.n, out))
+    (out / "dataset-metadata.json").write_text(_json.dumps(
+        {"title": "talashly-data", "id": f"{a.user}/talashly-data", "licenses": [{"name": "other"}]}), encoding="utf-8")
+    print(f"{n} passages -> {out}")
+    return 0 if n >= 50 else 1
+
+
 def cmd_restore(a) -> int:
     from .config import load_config
     from .db import restore_latest_backup
@@ -341,6 +355,12 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--local", action="store_true", help="is machine ke app ko seedha (bina network) test karo")
     s.add_argument("--report", action="store_true")
     s.set_defaults(fn=cmd_autopilot)
+    s = sub.add_parser("export-train", help="Kaggle training ke liye passages export (live site ke public search se)")
+    s.add_argument("--url", required=True)
+    s.add_argument("--n", type=int, default=2500)
+    s.add_argument("--out", default="kaggle/dataset")
+    s.add_argument("--user", default="musfiraai", help="Kaggle username (dataset id ke liye)")
+    s.set_defaults(fn=cmd_export_train)
     s = sub.add_parser("doctor", help="system check")
     s.set_defaults(fn=cmd_doctor)
     a = ap.parse_args(argv)

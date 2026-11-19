@@ -1,0 +1,13 @@
+{
+  "id": "__USER__/talashly-train",
+  "title": "talashly-train",
+  "code_file": "train.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_internet": "true",
+  "dataset_sources": ["__USER__/talashly-data"],
+  "competition_sources": [],
+  "kernel_sources": []
+}

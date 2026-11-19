@@ -65,3 +65,10 @@ Outbound traffic is only: your crawler fetching public pages (polite, robots.txt
 Sawal index ke asli text se khud bante hain; har level pichle se mushkil (typos, filler, mixed language, compare, follow-up, injection...).
 95% pass hone par level badhta hai. Yaad `data/autopilot/memory.db`, report `data/autopilot/report.md` (admin: `GET /admin/autopilot`),
 fail sawal `failures.jsonl` (training/fixing ke liye). Optional LLM sawal-saaz: `AP_LLM_URL`, `AP_LLM_KEY`, `AP_LLM_MODEL` (koi bhi OpenAI-compatible).
+
+## Kaggle training (free GPU, khud chalta)
+
+Workflow `kaggle-train` (hafte mein ek baar + manual): live site ke public search se passages -> Kaggle dataset ->
+Kaggle GPU par teacher (Qwen3-8B 4-bit) sahi jawab banata hai -> Qwen3-1.7B par LoRA -> GGUF Q4 -> GitHub Release `model-latest`.
+Zaroorat: repo Secrets `KAGGLE_USERNAME`, `KAGGLE_KEY` (Kaggle Settings > API Tokens). Model chalane ke liye `deploy/fetch-model.sh`.
+Training sirf Kaggle ke batch mode mein hoti hai (server nahi banta), is liye Kaggle ke terms ke andar rehta hai.

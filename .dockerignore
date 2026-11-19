@@ -12,3 +12,4 @@ docs
 *.db-wal
 *.db-shm
 *.gguf
+kaggle
