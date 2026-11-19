@@ -25,11 +25,12 @@ services:
     build: .
     restart: unless-stopped
     mem_limit: 150m
+    cpu_shares: 64   # CPU kam ho to search ko pehle
     init: true
     depends_on: [search]
     command: ["python", "-m", "engine", "autopilot", "--url", "http://search:8000"]
     environment:
-      - AP_PER_MIN=${AP_PER_MIN:-6}
+      - AP_PER_MIN=${AP_PER_MIN:-3}
       - AP_LLM_URL=${AP_LLM_URL:-}
       - AP_LLM_KEY=${AP_LLM_KEY:-}
       - AP_LLM_MODEL=${AP_LLM_MODEL:-}

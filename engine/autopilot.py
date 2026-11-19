@@ -427,7 +427,8 @@ async def run(url: str | None, data_dir: str, db_path: str | None, key: str | No
         except Exception as e:  # noqa: BLE001  generator ki apni galti loop nahi rokti
             print(f"[autopilot] internal {type(e).__name__}: {e}", flush=True)
             n += 1
-        await asyncio.sleep(max(0.0, gap - (time.time() - t_start)))
+        slow = time.time() - t_start > 2.5  # server dheema/masroof (asli users ko pehle): autopilot peechay hat jaye
+        await asyncio.sleep(max(0.0, gap - (time.time() - t_start)) + (25 if slow and not local and app is None else 0))
     md = mem.write_reports(out)
     print(md)
     await client.aclose()
