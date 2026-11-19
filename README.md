@@ -72,3 +72,8 @@ Workflow `kaggle-train` (hafte mein ek baar + manual): live site ke public searc
 Kaggle GPU par teacher (Qwen3-8B 4-bit) sahi jawab banata hai -> Qwen3-1.7B par LoRA -> GGUF Q4 -> GitHub Release `model-latest`.
 Zaroorat: repo Secrets `KAGGLE_USERNAME`, `KAGGLE_KEY` (Kaggle Settings > API Tokens). Model chalane ke liye `deploy/fetch-model.sh`.
 Training sirf Kaggle ke batch mode mein hoti hai (server nahi banta), is liye Kaggle ke terms ke andar rehta hai.
+
+## Compute Mesh (Kaggle live LLM node + auto-fallback)
+Talashly ke jawab ke liye LLM nodes ek saath: (1) static node (apni 24/7 machine, `SS_LLM_*`), (2) relay nodes (Kaggle CPU notebook, ~30 GB RAM) jo sirf bahar se judte hain: VM se kaam pull, token push. HMAC-SHA256 signed (`MESH_SECRET`), replay-guard, circuit breaker. Koi node na ho / gire / dheema ho -> agla node -> aakhir mein Talashly ka apna search-brain (hamesha chalta). Node band hote hi `bye` se turant fallback.
+Setup (ek baar): VM par `sudo cat ~/talashly/data/mesh_secret.txt` -> GitHub Secret `MESH_SECRET`; phir Actions -> `kaggle-node` -> Run workflow. Uske baad har ghante guard khud node dobara chalata hai (do slugs alternate). Status: `/api/mesh/status`, admin: `/admin/mesh`.
+Note: prompts aap ke apne Kaggle notebook tak jate hain (HTTP, signed). Kaggle ke ToS par server-jaisa use ka risk hai (unverified).

@@ -18,6 +18,7 @@ from .lang import reply_lang, tr
 from .models import Model, get_model
 from .builder import build_site, wants_site
 from .llm import stream_chat
+from .mesh import llm_available
 from .skills import compare, poem
 from .policy import CREATIVE, intent, is_unclear, policy_check, strip_cites, wants_sources
 from .search import Searcher, coverage, terms
@@ -503,7 +504,7 @@ class Chat:
                 yield "done", {"mode": "learned"}
                 return
         llm = self.cfg["llm"]
-        ready = bool(llm.get("enabled"))
+        ready = llm_available(llm)
         site = wants_site(text)
         if site and not ready:
             yield "token", build_site(text)

@@ -17,7 +17,8 @@ from .codeindex import index_paths
 from .lang import tr
 from .db import DB, domain_of, normalize_url
 from .extract import extract_links, weight
-from .llm import llm_alive, stream_chat
+from .llm import stream_chat
+from .mesh import llm_available
 from .search import (Hit, Searcher, build_answer, coverage, detect_script, ground_check, llm_prompt, snippet,
                      terms)
 
@@ -376,7 +377,7 @@ class Brain:
 
         mode = "extractive"
         ans = build_answer(q, hits, sentences or (8 if deep else 5))
-        use_llm = self.cfg["llm"]["enabled"] and await llm_alive(self.cfg["llm"]["base_url"])
+        use_llm = llm_available(self.cfg["llm"])
         if use_llm:
             buf: list[str] = []
             try:

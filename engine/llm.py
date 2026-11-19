@@ -40,7 +40,9 @@ async def _strip_think(it: AsyncIterator[str]) -> AsyncIterator[str]:
 
 
 async def stream_chat(c: dict, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.5) -> AsyncIterator[str]:
-    async for t in _strip_think(_stream_chat_raw(c, messages, max_tokens, temperature)):
+    """Mesh ke zariye: static node + relay nodes (Kaggle...) order se, auto-failover. Koi nahi to NodeError (caller extractive par girta hai)."""
+    from .mesh import MESH
+    async for t in _strip_think(MESH.stream(c, messages, max_tokens, temperature)):
         yield t
 
 

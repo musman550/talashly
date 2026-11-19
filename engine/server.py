@@ -22,6 +22,7 @@ from .chat import CLIENT_ID, Chat, format_with_sources
 from .config import ROOT, load_config, load_seeds, load_sources
 from .db import DB, domain_of, normalize_url
 from .lang import tr
+from .mesh import MESH, load_secret
 from .llm import llm_alive
 from .models import MODELS, get_model
 from .search import Searcher, snippet, terms
@@ -116,6 +117,7 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        MESH.secret = load_secret(cfg["_data_dir"])
         key = ensure_admin(db, cfg["_data_dir"])
         if key:
             print(f"\n[!] Admin API key bana di gayi: {Path(cfg['_data_dir']) / 'admin_key.txt'}\n")
@@ -266,10 +268,47 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
             "crawler": {"enabled": sup.do_crawl, "running": bool(sup.crawler and sup.crawler.running),
                         "heartbeat_age_s": round(time.time() - beat) if beat else None, "restarts": sup.restarts},
             "index": {"docs": c["docs"], "chunks": c["chunks"], "size_mb": round(db.size_mb(), 1)},
-            "llm": {"enabled": cfg["llm"]["enabled"], "alive": llm_ok},
+            "llm": {"enabled": cfg["llm"]["enabled"], "alive": llm_ok, "relay_nodes": MESH.status()["nodes_alive"]},
             "features": {"trigram_cjk": db.has_trigram, "code_search": c["code_chunks"] > 0},
             "config_problems_fixed": cfg.get("_problems", []),
         }
+
+    # ---------------------------------------------------------------- compute mesh (relay nodes: Kaggle/Colab/laptop)
+    async def _mesh_auth(request: Request) -> bytes:
+        body = await request.body()
+        if not MESH.verify(request.method, request.url.path, body, request.headers.get("x-mesh-ts"), request.headers.get("x-mesh-sig")):
+            raise HTTPException(401, "bad signature")
+        return body
+
+    @app.post("/api/mesh/pull")
+    async def mesh_pull(request: Request):
+        body = await _mesh_auth(request)
+        try:
+            d = json.loads(body or b"{}")
+        except ValueError:
+            raise HTTPException(400, "bad json")
+        name = re.sub(r"[^\w.-]", "", str(d.get("node", "node")))[:40] or "node"
+        if d.get("bye"):
+            MESH.drop(name)
+            return {"job": None}
+        job = await MESH.pull(name, str(d.get("model", "")), int(d.get("slots", 1) or 1), wait_s=min(25.0, float(d.get("wait_s", 20))))
+        return {"job": job}
+
+    @app.post("/api/mesh/push/{job_id}")
+    async def mesh_push(job_id: str, request: Request):
+        body = await _mesh_auth(request)
+        try:
+            return MESH.push(job_id, json.loads(body or b"{}"))
+        except ValueError:
+            raise HTTPException(400, "bad json")
+
+    @app.get("/api/mesh/status")
+    async def mesh_status():
+        return MESH.status()   # sirf ginti: Actions/monitor ke liye (koi naam/secret nahi)
+
+    @app.get("/admin/mesh")
+    async def admin_mesh(a: dict = Depends(admin_user)):
+        return MESH.status(detail=True)
 
     # ---------------------------------------------------------------- admin API
     @app.post("/admin/seed")

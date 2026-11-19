@@ -174,8 +174,7 @@ def test_grounded_llm_path_sends_key_and_hides_think(tmp_path, monkeypatch):
 
     async def alive(url):
         return True
-    import engine.brain as brain_mod
-    monkeypatch.setattr(brain_mod, "llm_alive", alive)
+    monkeypatch.setattr(llm_mod, "llm_alive", alive)   # mesh isi ko andar se import karta hai
     cfg, app = build(tmp_path)
     cfg["llm"].update(enabled=True, base_url="http://ai.example:8081", api_key="sekret", model="")
     with TestClient(app) as c:

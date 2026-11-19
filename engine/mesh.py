@@ -1,0 +1,302 @@
+"""Compute Mesh: kai LLM-nodes (apni machine, Kaggle/Colab notebook, koi bhi laptop) ek saath, auto-failover ke saath.
+
+* Static node  : config/env ka OpenAI-compatible endpoint (apni 24/7 machine par llama.cpp) - sab se pehle.
+* Relay node   : koi bhi machine jo sirf *bahar* (outbound HTTP) se judti hai: VM se kaam "kheenchti" (pull) hai aur
+                 token wapas "dhakelti" (push) hai. Na tunnel, na khula port, na URL-badalna. Kaggle notebook isi tarah judta hai.
+Koi bhi node na ho / gir jaye / dheema ho -> router agla node aazmata hai, aakhir mein Talashly ka apna search-brain (hamesha chalta hai).
+Auth: HMAC-SHA256 (shared secret kabhi wire par nahi jata), time-window + replay-guard.
+"""
+from __future__ import annotations
+
+import asyncio
+import collections
+import hashlib
+import hmac
+import json
+import os
+import secrets
+import time
+import uuid
+from pathlib import Path
+from typing import AsyncIterator
+
+import httpx
+
+PULL_TTL_S = 45          # itni der se pull na aaye to node mara hua
+PICKUP_TIMEOUT_S = 4.0   # job itni der mein na uthe to agla node/fallback
+FIRST_TOKEN_S = 60.0     # CPU par prompt process hone mein waqt lagta hai
+CHUNK_TIMEOUT_S = 25.0
+MAX_PENDING = 8
+SKEW_S = 60
+BREAK_AFTER, BREAK_FOR_S = 3, 30
+
+
+class NodeError(RuntimeError):
+    """Is node se jawab nahi mila (agla node aazmao)."""
+
+
+def load_secret(data_dir: str) -> str:
+    """Shared secret: env MESH_SECRET ya data/mesh_secret.txt (pehli baar khud bante)."""
+    env = os.environ.get("MESH_SECRET", "").strip()
+    if len(env) >= 16:
+        return env
+    f = Path(data_dir) / "mesh_secret.txt"
+    try:
+        if f.exists() and len(f.read_text().strip()) >= 16:
+            return f.read_text().strip()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        s = secrets.token_hex(24)
+        f.write_text(s)
+        try:
+            os.chmod(f, 0o600)
+        except OSError:
+            pass
+        return s
+    except OSError:
+        return secrets.token_hex(24)  # read-only disk: is process ke liye hi (node judne se pehle secret padhna zaroori)
+
+
+def sign(secret: str, method: str, path: str, body: bytes, ts: int | None = None) -> dict:
+    ts = int(time.time()) if ts is None else ts
+    msg = f"{ts}.{method.upper()}.{path}.{hashlib.sha256(body).hexdigest()}".encode()
+    return {"X-Mesh-Ts": str(ts), "X-Mesh-Sig": hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()}
+
+
+class Job:
+    def __init__(self, messages, max_tokens, temperature):
+        self.id = uuid.uuid4().hex
+        self.payload = {"id": self.id, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
+        self.q: asyncio.Queue = asyncio.Queue()
+        self.taken = asyncio.Event()
+        self.cancelled = False
+        self.node: str | None = None
+        self.t0 = time.time()
+
+
+class RelayNode:
+    def __init__(self, name: str):
+        self.name, self.model, self.slots = name, "", 1
+        self.first_seen = self.last_seen = time.time()
+        self.done = self.failed = 0
+        self.lat_ms: float | None = None
+        self.busy = 0
+
+    def alive(self) -> bool:
+        return time.time() - self.last_seen <= PULL_TTL_S
+
+    def info(self) -> dict:
+        return {"name": self.name, "model": self.model, "alive": self.alive(), "age_s": round(time.time() - self.first_seen),
+                "busy": self.busy, "slots": self.slots, "done": self.done, "failed": self.failed,
+                "first_token_ms": round(self.lat_ms) if self.lat_ms else None}
+
+
+class Mesh:
+    def __init__(self):
+        self.secret = ""
+        self.nodes: dict[str, RelayNode] = {}
+        self.jobs: dict[str, Job] = {}
+        self.pending: collections.deque[Job] = collections.deque()
+        self._wake = asyncio.Event()
+        self._seen: dict[str, float] = {}
+        self._breaker: dict[str, list] = {}   # key -> [fails, until]
+        self.stats = collections.Counter()
+
+    # ------------------------------------------------------------ auth
+    def verify(self, method: str, path: str, body: bytes, ts: str | None, sig: str | None) -> bool:
+        if not self.secret or not ts or not sig:
+            return False
+        try:
+            t = int(ts)
+        except ValueError:
+            return False
+        if abs(time.time() - t) > SKEW_S:
+            return False
+        want = sign(self.secret, method, path, body, t)["X-Mesh-Sig"]
+        if not hmac.compare_digest(want, sig):
+            return False
+        now = time.time()
+        for k in [k for k, v in self._seen.items() if now - v > 2 * SKEW_S]:
+            self._seen.pop(k, None)
+        if sig in self._seen:
+            return False  # replay
+        self._seen[sig] = now
+        return True
+
+    # ------------------------------------------------------------ node side (HTTP handlers call these)
+    def touch(self, name: str, model: str = "", slots: int = 1) -> RelayNode:
+        n = self.nodes.get(name)
+        if not n or not n.alive():
+            n = self.nodes[name] = RelayNode(name)  # purana mara hua node: nayi zindagi (age reset)
+        n.last_seen = time.time()
+        n.model = (model or n.model)[:60]
+        n.slots = max(1, min(int(slots or 1), 8))
+        return n
+
+    def drop(self, name: str):
+        """Node khud 'bye' kahe (graceful band): turant mara hua maano, 45 s intezar nahi."""
+        n = self.nodes.pop(name, None)
+        if n:
+            self.stats["bye"] += 1
+
+    async def pull(self, name: str, model: str, slots: int, wait_s: float = 20.0) -> dict | None:
+        n = self.touch(name, model, slots)
+        end = time.time() + wait_s
+        while time.time() < end:
+            while self.pending:
+                job = self.pending.popleft()
+                if job.cancelled or job.taken.is_set():
+                    continue
+                job.node = name
+                job.taken.set()
+                n.busy += 1
+                return job.payload
+            self._wake.clear()
+            try:
+                await asyncio.wait_for(self._wake.wait(), timeout=min(2.0, max(0.05, end - time.time())))
+            except asyncio.TimeoutError:
+                pass
+            n.last_seen = time.time()
+        return None
+
+    def push(self, job_id: str, msg: dict) -> dict:
+        job = self.jobs.get(job_id)
+        if not job:
+            return {"ok": False, "cancel": True}
+        n = self.nodes.get(job.node or "")
+        if n:
+            n.last_seen = time.time()
+        if msg.get("delta"):
+            job.q.put_nowait(("tok", str(msg["delta"])))
+        if msg.get("error"):
+            job.q.put_nowait(("err", str(msg["error"])[:200]))
+        if msg.get("done"):
+            job.q.put_nowait(("done", None))
+        return {"ok": True, "cancel": job.cancelled}
+
+    # ------------------------------------------------------------ router
+    def alive_relays(self) -> list[RelayNode]:
+        return sorted((n for n in self.nodes.values() if n.alive()), key=lambda n: (n.busy / n.slots, n.lat_ms or 1e9))
+
+    def has_alive(self) -> bool:
+        return bool(self.alive_relays())
+
+    def status(self, detail: bool = False) -> dict:
+        al = self.alive_relays()
+        s = {"nodes_alive": len(al), "oldest_age_s": max((round(time.time() - n.first_seen) for n in al), default=0),
+             "pending": len(self.pending)}
+        if detail:
+            s["nodes"] = [n.info() for n in self.nodes.values()]
+            s["stats"] = dict(self.stats)
+        return s
+
+    def _broken(self, key: str) -> bool:
+        b = self._breaker.get(key)
+        if key == "static_alive":
+            return False
+        return bool(b and b[0] >= BREAK_AFTER and time.time() < b[1])
+
+    def _fail(self, key: str):
+        b = self._breaker.setdefault(key, [0, 0.0])
+        b[0] += 1
+        b[1] = time.time() + BREAK_FOR_S
+
+    def _ok(self, key: str):
+        self._breaker.pop(key, None)
+
+    async def _relay_stream(self, node: RelayNode, messages, max_tokens, temperature) -> AsyncIterator[str]:
+        if len(self.pending) >= MAX_PENDING:
+            raise NodeError("queue full")
+        job = Job(messages, max_tokens, temperature)
+        self.jobs[job.id] = job
+        self.pending.append(job)
+        self._wake.set()
+        t0 = time.time()
+        got = False
+        try:
+            try:
+                await asyncio.wait_for(job.taken.wait(), PICKUP_TIMEOUT_S)
+            except asyncio.TimeoutError:
+                raise NodeError("not picked up") from None
+            while True:
+                try:
+                    kind, val = await asyncio.wait_for(job.q.get(), CHUNK_TIMEOUT_S if got else FIRST_TOKEN_S)
+                except asyncio.TimeoutError:
+                    raise NodeError("node stalled") from None
+                if kind == "tok":
+                    if not got:
+                        got = True
+                        node.lat_ms = (time.time() - t0) * 1000
+                    yield val
+                elif kind == "err":
+                    raise NodeError(val)
+                else:
+                    node.done += 1
+                    return
+        except GeneratorExit:   # user ne beech mein rok diya: node ki galti nahi
+            raise
+        except BaseException:
+            node.failed += 1
+            raise
+        finally:
+            job.cancelled = True
+            if job.node and (n := self.nodes.get(job.node)):
+                n.busy = max(0, n.busy - 1)
+            self.jobs.pop(job.id, None)
+
+    async def _static_alive(self, cfg: dict) -> bool:
+        """Static node zinda? (15 s cache) - mara hua server har sawal par 10 s connect-timeout na khaye."""
+        from .llm import llm_alive
+        c = self._breaker.setdefault("static_alive", [0, 0.0])
+        now = time.time()
+        if now - c[1] < 15 and len(c) > 2:
+            return bool(c[2])
+        ok = await llm_alive(cfg["base_url"])
+        c[:] = [0, now, ok]
+        return ok
+
+    async def _static_stream(self, cfg: dict, messages, max_tokens, temperature) -> AsyncIterator[str]:
+        from .llm import _stream_chat_raw
+        if not cfg.get("api_key") and not await self._static_alive(cfg):   # key wala = bahari provider: /health nahi hota
+            raise NodeError("static node down")
+        async for t in _stream_chat_raw(cfg, messages, max_tokens, temperature):
+            yield t
+
+    async def stream(self, cfg: dict, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.5) -> AsyncIterator[str]:
+        """Sab nodes ko order se aazmata hai. Pehla token aane se pehle ki har galti par agla node;
+        token aane ke baad galti ho to upar phenk deta hai (caller ya to 'replace' karta hai ya extractive par girta hai)."""
+        cands: list[tuple[str, object]] = []
+        if cfg.get("enabled"):
+            cands.append(("static", cfg))
+        cands += [(f"relay:{n.name}", n) for n in self.alive_relays()]
+        last: Exception | None = None
+        for key, node in cands:
+            if self._broken(key):
+                continue
+            started = False
+            try:
+                it = (self._static_stream(node, messages, max_tokens, temperature) if key == "static"
+                      else self._relay_stream(node, messages, max_tokens, temperature))
+                async for t in it:
+                    started = True
+                    yield t
+                self._ok(key)
+                self.stats["served_" + key.split(":")[0]] += 1
+                return
+            except GeneratorExit:
+                raise
+            except Exception as e:  # noqa: BLE001
+                self._fail(key)
+                self.stats["failed_" + key.split(":")[0]] += 1
+                last = e
+                if started:
+                    raise
+        self.stats["no_node"] += 1
+        raise NodeError(f"no llm node available ({last})" if last else "no llm node available")
+
+
+MESH = Mesh()
+
+
+def llm_available(cfg: dict) -> bool:
+    """Kam az kam ek LLM zinda hone ki umeed: static enabled ya koi relay-node abhi pull kar raha hai."""
+    return bool(cfg.get("enabled")) or MESH.has_alive()

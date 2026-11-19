@@ -1,0 +1,83 @@
+name: kaggle-node
+# Har ghante guard: Kaggle par live LLM-node (CPU notebook, ~30 GB RAM) zinda hai? Nahi to naya chalao (do slugs alternate, overlap ke saath).
+# Node sirf bahar se judta hai (pull/push), HMAC-signed. Zaroorat: Secrets KAGGLE_USERNAME, KAGGLE_KEY, MESH_SECRET.
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kaggle-node
+  cancel-in-progress: false
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      MESH_SECRET: ${{ secrets.MESH_SECRET }}
+      SITE_URL: ${{ vars.AUTOPILOT_URL || 'http://137.23.39.13:8000' }}
+      MODEL_URL: ${{ vars.NODE_MODEL_URL || '' }}
+    steps:
+      - name: Secrets check
+        id: sec
+        run: |
+          if [ -z "$KAGGLE_KEY" ] || [ -z "$KAGGLE_USERNAME" ] || [ -z "$MESH_SECRET" ]; then
+            echo "::warning::KAGGLE_USERNAME / KAGGLE_KEY / MESH_SECRET mein se koi secret nahi mila - skip"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Does a node need starting?
+        id: need
+        if: steps.sec.outputs.ok == 'true'
+        run: |
+          st=$(curl -fsS -m 20 "$SITE_URL/api/mesh/status" || echo "")
+          echo "status: $st"
+          if [ -z "$st" ]; then echo "::warning::site tak nahi pahunch saka - skip"; echo "start=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          alive=$(echo "$st" | python3 -c 'import sys,json;print(json.load(sys.stdin)["nodes_alive"])')
+          age=$(echo "$st" | python3 -c 'import sys,json;print(json.load(sys.stdin)["oldest_age_s"])')
+          if [ "$alive" = "0" ] || { [ "$alive" = "1" ] && [ "$age" -gt 37800 ]; }; then echo "start=true" >> "$GITHUB_OUTPUT"; else echo "start=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.need.outputs.start == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.need.outputs.start == 'true'
+        with:
+          python-version: "3.12"
+      - name: Kaggle login
+        if: steps.need.outputs.start == 'true'
+        run: |
+          pip install -q kaggle
+          mkdir -p ~/.kaggle
+          if [[ "$KAGGLE_KEY" == KGAT_* ]]; then
+            printf '%s' "$KAGGLE_KEY" > ~/.kaggle/access_token
+            echo "KAGGLE_API_TOKEN=$KAGGLE_KEY" >> "$GITHUB_ENV"
+          else
+            printf '{"username":"%s","key":"%s"}' "$KAGGLE_USERNAME" "$KAGGLE_KEY" > ~/.kaggle/kaggle.json
+          fi
+          chmod 600 ~/.kaggle/* || true
+      - name: Push a node notebook
+        if: steps.need.outputs.start == 'true'
+        run: |
+          set -e
+          model="$MODEL_URL"
+          if [ -z "$model" ]; then
+            model="https://github.com/${{ github.repository }}/releases/download/model-latest/talashly-qwen3-1.7b-Q4_K_M.gguf"
+            code=$(curl -s -o /dev/null -w '%{http_code}' -I -L -m 20 "$model" || echo 000)
+            [ "$code" = "200" ] || model="https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"
+          fi
+          pick=""
+          for slug in talashly-node-a talashly-node-b; do
+            s=$(kaggle kernels status "$KAGGLE_USERNAME/$slug" 2>&1 || true)
+            echo "$slug: $s"
+            if echo "$s" | grep -qiE "running|queued"; then continue; fi
+            pick="$slug"; break
+          done
+          if [ -z "$pick" ]; then echo "::warning::dono slots busy - agle ghante dekhenge"; exit 0; fi
+          mkdir -p kernel && cp kaggle/node/node.py kernel/
+          sed -e "s|__USER__|$KAGGLE_USERNAME|g" -e "s|__SLUG__|$pick|g" kaggle/node/kernel-metadata.json > kernel/kernel-metadata.json
+          sed -i -e "s|__SITE__|$SITE_URL|g" -e "s|__SECRET__|$MESH_SECRET|g" -e "s|__MODEL_URL__|$model|g" -e "s|__HOURS__|10.5|g" -e "s|__SLUG__|$pick|g" kernel/node.py
+          for i in 1 2 3; do kaggle kernels push -p kernel && break || { echo "retry $i"; sleep 20; }; done
+          echo "started $pick"
