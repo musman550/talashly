@@ -127,7 +127,7 @@ class Searcher:
     def _run(self, match: str, limit: int):
         sql = _SELECT.format(rank="bm25(chunks_fts, 1.0, 4.0)", tbl="chunks_fts") + \
             " WHERE chunks_fts MATCH ? ORDER BY rank LIMIT ?"
-        return self.db.q(sql, (match, limit))
+        return self.db.rq(sql, (match, limit))
 
     def _run_cjk(self, query: str, limit: int):
         rows, seen = [], set()
@@ -135,11 +135,11 @@ class Searcher:
             if len(run) >= 3 and self.db.has_trigram:
                 sql = _SELECT.format(rank="bm25(chunks_tri)", tbl="chunks_tri") + \
                     " WHERE chunks_tri MATCH ? ORDER BY rank LIMIT ?"
-                got = self.db.q(sql, (_fts_quote(run), limit))
+                got = self.db.rq(sql, (_fts_quote(run), limit))
             else:  # 1-2 character words (Chinese mein aam): trigram nahi, seedha substring
                 sql = ("SELECT c.id AS cid, c.doc_id, c.text, d.url, d.title, d.domain, d.published_at, d.fetched_at, "
                        "-1.0 AS rank FROM chunks c JOIN docs d ON d.id=c.doc_id WHERE c.text LIKE ? LIMIT ?")
-                got = self.db.q(sql, (f"%{run}%", limit))
+                got = self.db.rq(sql, (f"%{run}%", limit))
             for r in got:
                 if r["cid"] not in seen:
                     seen.add(r["cid"])
@@ -194,8 +194,8 @@ class Searcher:
             if len(out) >= limit:
                 break
         if log:
-            self.db.x("INSERT INTO query_log(q,at,results,ms) VALUES(?,?,?,?)",
-                      (query, now, len(out), (time.time() - t0) * 1000))
+            self.db.wx("INSERT INTO query_log(q,at,results,ms) VALUES(?,?,?,?)",
+                       (query, now, len(out), (time.time() - t0) * 1000))
         return out
 
     def search_many(self, queries: list[str], limit: int = 8) -> list[Hit]:
@@ -228,7 +228,7 @@ class Searcher:
                    "FROM code_fts JOIN code_chunks c ON c.id=code_fts.rowid WHERE code_fts MATCH ? "
                    + ("AND c.lang=? " if lang else "") + "ORDER BY rank LIMIT ?")
             args = (match, lang, limit) if lang else (match, limit)
-            return self.db.q(sql, args)
+            return self.db.rq(sql, args)
         rows = run(" AND ")
         if len(rows) < 3 and len(ts) > 1:
             rows = run(" OR ")

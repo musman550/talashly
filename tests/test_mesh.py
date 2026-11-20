@@ -433,3 +433,31 @@ def test_deep_mode_task_goes_straight_to_llm_but_questions_still_research(tmp_pa
     a, b, dt = asyncio.run(go())
     assert a[1] == "llm-direct" and a[0].startswith("NODE says:") and dt < 5, (a, dt)
     assert b[1] != "llm-direct", b
+
+
+def test_slow_search_does_not_block_the_server(tmp_path, monkeypatch):
+    """Bhari/dheemi search ke dauran health aur mesh endpoints turant jawab dein (event loop khali rahe)."""
+    cfg, app = build_site(tmp_path)
+    from engine.search import Searcher
+    real = Searcher.search_many
+
+    def slow(self, qs, limit=8):
+        time.sleep(1.5)
+        return real(self, qs, limit)
+    monkeypatch.setattr(Searcher, "search_many", slow)
+
+    async def go():
+        async with app.router.lifespan_context(app):
+            c = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://site.test")
+            chat_t = asyncio.create_task(ask(c, "what does a polite crawler do", model="mus-7.01-deep"))
+            await asyncio.sleep(0.3)
+            lat = []
+            for path in ("/api/mesh/status", "/api/health", "/api/mesh/status"):
+                t0 = time.time()
+                r = await c.get(path)
+                lat.append(time.time() - t0)
+                assert r.status_code == 200
+            await chat_t
+            return lat
+    lat = asyncio.run(go())
+    assert max(lat) < 0.6, lat

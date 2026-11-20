@@ -387,7 +387,7 @@ class Chat:
                         if show and eq != text:
                             yield "rewrite", {"query": eq}
                         bq = eq
-                        if model.code_first and not re.match(r"\s*code:", eq, re.I) and self.searcher.search_code(eq, None, 1):
+                        if model.code_first and not re.match(r"\s*code:", eq, re.I) and (await asyncio.to_thread(self.searcher.search_code, eq, None, 1)):
                             bq = "code: " + eq
                         try:
                             async for ev, data in self.brain.run(
@@ -521,7 +521,7 @@ class Chat:
                     return
         eq = contextualize(text, prev_user)
         try:
-            weak = coverage(eq, self.searcher.search_many([eq], 8)) < 0.6
+            weak = coverage(eq, await asyncio.to_thread(self.searcher.search_many, [eq], 8)) < 0.6
         except Exception:  # noqa: BLE001  search gira: normal rasta apna error-jawab dega
             return
         if not ready:

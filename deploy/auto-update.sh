@@ -4,6 +4,7 @@
 set -uo pipefail
 DIR="${DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$DIR" || exit 0
+git config --global --add safe.directory "$DIR" 2>/dev/null   # root se chalne par "dubious ownership" se git chup-chaap fail na ho
 CHANGED=0
 if git fetch --quiet origin main 2>/dev/null; then
   LOCAL="$(git rev-parse HEAD)"; REMOTE="$(git rev-parse origin/main)"

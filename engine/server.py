@@ -196,7 +196,7 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     async def api_search(q: str = Query(min_length=1, max_length=500), limit: int = 8, domain: str | None = None,
                          u: dict = Depends(current_user)):
         t0 = time.time()
-        hits = searcher.search(q, max(1, min(limit, 30)), domain)
+        hits = await asyncio.to_thread(searcher.search, q, max(1, min(limit, 30)), domain)
         ts = terms(q)
         return {"query": q, "took_ms": round((time.time() - t0) * 1000, 1),
                 "results": [{"title": h.title, "url": h.url, "domain": h.domain, "snippet": snippet(h.passages[0], ts),
@@ -206,7 +206,7 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     @app.get("/api/code")
     async def api_code(q: str = Query(min_length=1, max_length=300), lang: str | None = None, limit: int = 10,
                        u: dict = Depends(current_user)):
-        hits = searcher.search_code(q, lang, max(1, min(limit, 30)))
+        hits = await asyncio.to_thread(searcher.search_code, q, lang, max(1, min(limit, 30)))
         return {"query": q, "results": [{"path": h.path, "lang": h.lang, "start": h.start, "end": h.end,
                                          "text": h.text, "score": round(h.score, 3)} for h in hits]}
 
@@ -251,7 +251,7 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
 
     @app.get("/api/stats")
     async def api_stats():
-        c = db.counts()
+        c = await asyncio.to_thread(db.counts)
         st = {r["k"]: r["v"] for r in db.q("SELECT k,v FROM stats")}
         last = db.q("SELECT MAX(fetched_at) FROM docs")[0][0]
         top = [dict(r) for r in db.q("SELECT domain, COUNT(*) n FROM docs GROUP BY domain ORDER BY n DESC LIMIT 10")]
@@ -261,7 +261,7 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     @app.get("/api/health")
     async def api_health():
         beat = db.get_stat("heartbeat", 0)
-        c = db.counts()
+        c = await asyncio.to_thread(db.counts_cached)
         llm_ok = await llm_alive(cfg["llm"]["base_url"]) if cfg["llm"]["enabled"] else None
         return {
             "status": "ok", "uptime_s": round(time.time() - sup.started),

@@ -238,7 +238,7 @@ class Brain:
         q = rows[0]["q"]
         self.db.x("UPDATE gaps SET tries=tries+1 WHERE q=?", (q,))
         await self.live_research(q)
-        hits = self.searcher.search_many([q], 8)
+        hits = await asyncio.to_thread(self.searcher.search_many, [q], 8)
         if hits and coverage(q, hits) >= self.b["weak_coverage"]:
             self.db.x("UPDATE gaps SET resolved=1 WHERE q=?", (q,))
             self.db.log("gap-resolved", q)
@@ -332,7 +332,7 @@ class Brain:
             cq = re.sub(r"^\s*code:\s*", "", q, flags=re.I)
             lang = next((v for k, v in LANG_WORDS.items() if re.search(rf"(?<!\w){re.escape(k)}(?!\w)", cq, re.I)), None)
             yield "plan", {"intent": "code", "language": lang, "script": script}
-            ch = self.searcher.search_code(cq, lang) or (self.searcher.search_code(cq) if lang else [])
+            ch = await asyncio.to_thread(lambda: self.searcher.search_code(cq, lang) or (self.searcher.search_code(cq) if lang else []))
             if ch:
                 yield "code", [{"path": c.path, "lang": c.lang, "start": c.start, "end": c.end,
                                 "text": "\n".join(c.text.splitlines()[:25]), "score": round(c.score, 3)} for c in ch[:8]]
@@ -348,7 +348,7 @@ class Brain:
         self.db.log("plan", json.dumps({"q": q[:80], "subs": subs, "script": script}, ensure_ascii=False))
         ts = terms(q)
         limit = 10 if deep else 8
-        hits = self.searcher.search_many(subs, limit)
+        hits = await asyncio.to_thread(self.searcher.search_many, subs, limit)
         cov = coverage(q, hits)
         weak = cov < (weak_cov if weak_cov is not None else (0.9 if deep else self.b["weak_coverage"]))
         live_ok = self.b["live_research"] if live is None else (live and self.b["live_research"])
@@ -362,7 +362,7 @@ class Brain:
                 lr = {"tried": 0, "indexed": 0, "urls": []}
             if lr["indexed"]:
                 yield "step", {"msg": tr("live_ok", q, n=lr["indexed"])}
-                hits = self.searcher.search_many(subs, limit)
+                hits = await asyncio.to_thread(self.searcher.search_many, subs, limit)
                 cov = coverage(q, hits)
         if not hits or cov < self.b["weak_coverage"]:
             self.record_gap(q)  # system isay yaad rakhta hai aur background mein dobara koshish karega

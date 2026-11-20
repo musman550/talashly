@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 import sqlite3
+import threading
 import time
 from typing import Any, Iterable
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -238,6 +239,30 @@ class DB:
         except sqlite3.OperationalError:
             pass  # column pehle se hai
 
+    # ---------- thread-safe (worker threads) ----------
+    def _tconn(self, write: bool) -> sqlite3.Connection:
+        """Har thread ka apna connection: ek hi connection ko kai threads se chalana 'API misuse' deta hai.
+        WAL mein readers aur writer ek doosre ko nahi rokte; event loop thread ka apna `self.conn` alag rehta hai."""
+        tl = self.__dict__.setdefault("_tl", threading.local())
+        key = "w" if write else "r"
+        c = getattr(tl, key, None)
+        if c is None:
+            c = sqlite3.connect(self.path, timeout=30, isolation_level=None)
+            c.row_factory = sqlite3.Row
+            c.execute("PRAGMA cache_size=-8000")
+            if not write:
+                c.execute("PRAGMA query_only=1")
+            setattr(tl, key, c)
+        return c
+
+    def rq(self, sql: str, args: Iterable[Any] = ()) -> list[sqlite3.Row]:
+        """Padhna (kisi bhi thread se)."""
+        return self._tconn(False).execute(sql, tuple(args)).fetchall()
+
+    def wx(self, sql: str, args: Iterable[Any] = ()) -> None:
+        """Chhota likhna (kisi bhi thread se), apne connection se."""
+        self._tconn(True).execute(sql, tuple(args))
+
     # ---------- generic ----------
     def q(self, sql: str, args: Iterable[Any] = ()) -> list[sqlite3.Row]:
         return self.conn.execute(sql, tuple(args)).fetchall()
@@ -456,8 +481,17 @@ class DB:
                 pass  # kisi aur connection ne lock rakha hai: agli maintenance mein compact ho jayega
         return removed
 
+    def counts_cached(self, ttl: float = 60.0) -> dict[str, Any]:
+        """counts() bhari hai (poori tables scan) - health/stats har baar na chalayen; 60 s cache. Purani value turant, taza peeche se."""
+        c = getattr(self, "_counts", None)
+        if c and time.time() - c[0] < ttl:
+            return c[1]
+        v = self.counts()
+        self._counts = (time.time(), v)
+        return v
+
     def counts(self) -> dict[str, Any]:
-        one = lambda s: self.q(s)[0][0] or 0  # noqa: E731
+        one = lambda s: self.rq(s)[0][0] or 0  # noqa: E731
         return {
             "docs": one("SELECT COUNT(*) FROM docs"),
             "chunks": one("SELECT COUNT(*) FROM chunks"),
