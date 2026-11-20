@@ -32,15 +32,18 @@ def sh(cmd, check=True):
     return subprocess.run(cmd, shell=True, check=check)
 
 
-def fetch(url, dest, tries=4):
+def fetch(url, dest, tries=4, deadline_s=None):
     """Network tootne par (Connection reset...) dobara koshish, har baar shuru se."""
     for i in range(1, tries + 1):
         log("download", url[:110], f"(koshish {i})" if i > 1 else "")
         try:
+            t_start = time.time()
             req = urllib.request.Request(url, headers={"User-Agent": "talashly-node"})
-            with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
+            with urllib.request.urlopen(req, timeout=30) as r, open(dest, "wb") as f:
                 while chunk := r.read(1 << 20):
                     f.write(chunk)
+                    if deadline_s and time.time() - t_start > deadline_s:
+                        raise TimeoutError(f"{deadline_s}s se zyada lag raha hai")
             return
         except Exception as e:  # noqa: BLE001
             log("download fail:", type(e).__name__, str(e)[:100])
@@ -60,7 +63,7 @@ def releases():
         "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=15", headers={"User-Agent": "talashly-node"}), timeout=30))
 
 
-def install_llama(kind: str) -> str:
+def install_llama(kind: str, with_rt: bool = False) -> str:
     """kind: cpu | cuda. Naam/format badalta rehta hai -> naye releases mein pehla jo match kare. Server ka raasta lautata hai."""
     pat = r"^llama-.*-bin-ubuntu-x64\.(tar\.gz|zip)$" if kind == "cpu" else r"^llama-.*-bin-ubuntu-cuda-12\.\d+-x64\.(tar\.gz|zip)$"
     rt_pat = r"^cudart-llama-.*-bin-ubuntu-cuda-12\.\d+-x64\.(tar\.gz|zip)$"
@@ -71,11 +74,11 @@ def install_llama(kind: str) -> str:
         main = next((a for n, a in names.items() if re.match(pat, n)), None)
         if not main:
             continue
-        todo = [main] + ([a for n, a in names.items() if re.match(rt_pat, n)][:1] if kind == "cuda" else [])
+        todo = [main] + ([a for n, a in names.items() if re.match(rt_pat, n)][:1] if kind == "cuda" and with_rt else [])
         for k, a in enumerate(todo):
             arc = f"{W}/{a['name']}"
             try:
-                fetch(a["browser_download_url"], arc)
+                fetch(a["browser_download_url"], arc, deadline_s=240 if k else None)
                 sh(f"cd {W} && " + (f"unzip -q -o {arc} -d {d}" if arc.endswith(".zip") else f"tar -xzf {arc} -C {d}"))
                 os.remove(arc)
             except Exception as e:  # noqa: BLE001
@@ -131,7 +134,12 @@ def bring_up():
     if has_gpu():
         try:
             log("GPU mili: CUDA build + bara model")
-            return start_server(install_llama("cuda"), get_model(GPU_MODELS), True), "gpu"
+            model = get_model(GPU_MODELS)
+            try:   # pehle bina cudart (Kaggle image mein CUDA hota hai)
+                return start_server(install_llama("cuda"), model, True), "gpu"
+            except Exception as e:  # noqa: BLE001
+                log("CUDA server bina cudart nahi chala, cudart ke saath:", str(e)[:200])
+                return start_server(install_llama("cuda", with_rt=True), model, True), "gpu"
         except Exception as e:  # noqa: BLE001
             log("GPU raasta fail, CPU par girte hain:", str(e)[:300])
     return start_server(install_llama("cpu"), get_model(CPU_MODELS), False), "cpu"
