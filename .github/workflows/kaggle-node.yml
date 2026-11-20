@@ -34,9 +34,13 @@ jobs:
         id: need
         if: steps.sec.outputs.ok == 'true'
         run: |
-          st=$(curl -fsS -m 20 "$SITE_URL/api/mesh/status" || echo "")
+          st=""
+          for i in 1 2 3; do st=$(curl -fsS -m 25 "$SITE_URL/api/mesh/status" 2>/dev/null || echo ""); [ -n "$st" ] && break; sleep 5; done
           echo "status: $st"
-          if [ -z "$st" ]; then echo "::warning::site tak nahi pahunch saka - skip"; echo "start=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ -z "$st" ]; then
+            echo "::warning::GitHub se site tak nahi pahunch saka - Kaggle ki apni halat dekh kar chalayenge"
+            echo "start=true" >> "$GITHUB_OUTPUT"; echo "blind=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
           alive=$(echo "$st" | python3 -c 'import sys,json;print(json.load(sys.stdin)["nodes_alive"])')
           age=$(echo "$st" | python3 -c 'import sys,json;print(json.load(sys.stdin)["oldest_age_s"])')
           if [ "$alive" = "0" ] || { [ "$alive" = "1" ] && [ "$age" -gt 37800 ]; }; then echo "start=true" >> "$GITHUB_OUTPUT"; else echo "start=false" >> "$GITHUB_OUTPUT"; fi
@@ -68,13 +72,14 @@ jobs:
             code=$(curl -s -o /dev/null -w '%{http_code}' -I -L -m 20 "$model" || echo 000)
             [ "$code" = "200" ] || model="https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"
           fi
-          pick=""
+          pick=""; running=0
           for slug in talashly-node-a talashly-node-b; do
             s=$(kaggle kernels status "$KAGGLE_USERNAME/$slug" 2>&1 || true)
             echo "$slug: $s"
-            if echo "$s" | grep -qiE "running|queued"; then continue; fi
+            if echo "$s" | grep -qiE "running|queued"; then running=$((running+1)); continue; fi
             pick="$slug"; break
           done
+          if [ "${{ steps.need.outputs.blind }}" = "true" ] && [ "$running" -ge 1 ]; then echo "site nazar nahi aayi par ek node Kaggle par chal raha hai - kuch nahi karna"; exit 0; fi
           if [ -z "$pick" ]; then echo "::warning::dono slots busy - agle ghante dekhenge"; exit 0; fi
           mkdir -p kernel && cp kaggle/node/node.py kernel/
           sed -e "s|__USER__|$KAGGLE_USERNAME|g" -e "s|__SLUG__|$pick|g" kaggle/node/kernel-metadata.json > kernel/kernel-metadata.json
