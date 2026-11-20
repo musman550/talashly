@@ -32,12 +32,23 @@ def sh(cmd, check=True):
     return subprocess.run(cmd, shell=True, check=check)
 
 
-def fetch(url, dest):
-    log("download", url[:110])
-    req = urllib.request.Request(url, headers={"User-Agent": "talashly-node"})
-    with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
-        while chunk := r.read(1 << 20):
-            f.write(chunk)
+def fetch(url, dest, tries=4):
+    """Network tootne par (Connection reset...) dobara koshish, har baar shuru se."""
+    for i in range(1, tries + 1):
+        log("download", url[:110], f"(koshish {i})" if i > 1 else "")
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "talashly-node"})
+            with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
+                while chunk := r.read(1 << 20):
+                    f.write(chunk)
+            return
+        except Exception as e:  # noqa: BLE001
+            log("download fail:", type(e).__name__, str(e)[:100])
+            if os.path.exists(dest):
+                os.remove(dest)
+            if i == tries:
+                raise
+            time.sleep(3 * i)
 
 
 def has_gpu() -> bool:
@@ -61,11 +72,16 @@ def install_llama(kind: str) -> str:
         if not main:
             continue
         todo = [main] + ([a for n, a in names.items() if re.match(rt_pat, n)][:1] if kind == "cuda" else [])
-        for a in todo:
+        for k, a in enumerate(todo):
             arc = f"{W}/{a['name']}"
-            fetch(a["browser_download_url"], arc)
-            sh(f"cd {W} && " + (f"unzip -q -o {arc} -d {d}" if arc.endswith(".zip") else f"tar -xzf {arc} -C {d}"))
-            os.remove(arc)
+            try:
+                fetch(a["browser_download_url"], arc)
+                sh(f"cd {W} && " + (f"unzip -q -o {arc} -d {d}" if arc.endswith(".zip") else f"tar -xzf {arc} -C {d}"))
+                os.remove(arc)
+            except Exception as e:  # noqa: BLE001
+                if k == 0:
+                    raise          # asli server-build zaroori hai
+                log("cudart nahi mila (Kaggle image ki apni CUDA lib chalegi):", str(e)[:80])
         server = glob.glob(f"{d}/**/llama-server", recursive=True)
         if server:
             os.chmod(server[0], 0o755)
