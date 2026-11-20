@@ -15,11 +15,12 @@ from .mesh import sign
 
 class RelayWorker:
     def __init__(self, site: str, secret: str, llm_url: str, name: str = "node", model: str = "", slots: int = 2,
-                 max_runtime_s: float | None = None, llm_key: str = "", flush_s: float = 0.12, log=print):
+                 max_runtime_s: float | None = None, llm_key: str = "", flush_s: float = 0.12, log=print, tier: int = 1):
         self.site, self.secret, self.llm = site.rstrip("/"), secret, llm_url.rstrip("/")
         self.name, self.model, self.slots = name, model, slots
         self.deadline = time.time() + max_runtime_s if max_runtime_s else None
         self.llm_key, self.flush_s, self.log = llm_key, flush_s, log
+        self.tier = tier     # 1 = CPU, 3 = GPU: mesh tez tier ko pehle kaam deta hai
         self.stop = False
         self.served = self.errors = 0
         self._tr = None   # tests ke liye transport
@@ -117,7 +118,7 @@ class RelayWorker:
                     if not await self.llm_ready():
                         await asyncio.sleep(3)
                         continue
-                    res = await self._post(c, "/api/mesh/pull", {"node": self.name, "model": self.model, "slots": self.slots, "wait_s": 12})
+                    res = await self._post(c, "/api/mesh/pull", {"node": self.name, "model": self.model, "slots": self.slots, "wait_s": 12, "tier": self.tier})
                     back, denied = 1.0, 0
                     if res.get("job"):
                         await self._serve(c, res["job"])

@@ -63,7 +63,8 @@ def sign(secret: str, method: str, path: str, body: bytes, ts: int | None = None
 
 
 class Job:
-    def __init__(self, messages, max_tokens, temperature):
+    def __init__(self, messages, max_tokens, temperature, target: str | None = None):
+        self.target = target     # sirf isi node ko dena (None = koi bhi)
         self.id = uuid.uuid4().hex
         self.payload = {"id": self.id, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
         self.q: asyncio.Queue = asyncio.Queue()
@@ -75,7 +76,7 @@ class Job:
 
 class RelayNode:
     def __init__(self, name: str):
-        self.name, self.model, self.slots = name, "", 1
+        self.name, self.model, self.slots, self.tier = name, "", 1, 1
         self.first_seen = self.last_seen = time.time()
         self.done = self.failed = 0
         self.lat_ms: float | None = None
@@ -85,7 +86,7 @@ class RelayNode:
         return time.time() - self.last_seen <= PULL_TTL_S
 
     def info(self) -> dict:
-        return {"name": self.name, "model": self.model, "alive": self.alive(), "age_s": round(time.time() - self.first_seen),
+        return {"name": self.name, "model": self.model, "tier": self.tier, "alive": self.alive(), "age_s": round(time.time() - self.first_seen),
                 "busy": self.busy, "slots": self.slots, "done": self.done, "failed": self.failed,
                 "first_token_ms": round(self.lat_ms) if self.lat_ms else None}
 
@@ -123,13 +124,14 @@ class Mesh:
         return True
 
     # ------------------------------------------------------------ node side (HTTP handlers call these)
-    def touch(self, name: str, model: str = "", slots: int = 1) -> RelayNode:
+    def touch(self, name: str, model: str = "", slots: int = 1, tier: int = 1) -> RelayNode:
         n = self.nodes.get(name)
         if not n or not n.alive():
             n = self.nodes[name] = RelayNode(name)  # purana mara hua node: nayi zindagi (age reset)
         n.last_seen = time.time()
         n.model = (model or n.model)[:60]
         n.slots = max(1, min(int(slots or 1), 8))
+        n.tier = max(1, min(int(tier or 1), 9))
         return n
 
     def drop(self, name: str):
@@ -138,14 +140,17 @@ class Mesh:
         if n:
             self.stats["bye"] += 1
 
-    async def pull(self, name: str, model: str, slots: int, wait_s: float = 20.0) -> dict | None:
-        n = self.touch(name, model, slots)
+    async def pull(self, name: str, model: str, slots: int, wait_s: float = 20.0, tier: int = 1) -> dict | None:
+        n = self.touch(name, model, slots, tier)
         end = time.time() + wait_s
         while time.time() < end:
-            while self.pending:
-                job = self.pending.popleft()
+            for job in list(self.pending):
                 if job.cancelled or job.taken.is_set():
+                    self.pending.remove(job)
                     continue
+                if job.target and job.target != name:   # kisi aur (tez) node ke liye hai
+                    continue
+                self.pending.remove(job)
                 job.node = name
                 job.taken.set()
                 n.busy += 1
@@ -175,7 +180,11 @@ class Mesh:
 
     # ------------------------------------------------------------ router
     def alive_relays(self) -> list[RelayNode]:
-        return sorted((n for n in self.nodes.values() if n.alive()), key=lambda n: (n.busy / n.slots, n.lat_ms or 1e9))
+        # pehle jinke slot khali hain; unmein se tez tier (GPU) pehle; phir naapi hui raftar; phir kam bhara hua
+        def load(n):   # chal rahe + is node ke liye intezar mein (abhi uthaye nahi gaye)
+            return n.busy + sum(1 for j in self.pending if j.target == n.name and not j.taken.is_set() and not j.cancelled)
+        return sorted((n for n in self.nodes.values() if n.alive()),
+                      key=lambda n: (load(n) >= n.slots, -n.tier, n.lat_ms or 1e9, load(n) / n.slots))
 
     def has_alive(self) -> bool:
         return bool(self.alive_relays())
@@ -206,7 +215,7 @@ class Mesh:
     async def _relay_stream(self, node: RelayNode, messages, max_tokens, temperature) -> AsyncIterator[str]:
         if len(self.pending) >= MAX_PENDING:
             raise NodeError("queue full")
-        job = Job(messages, max_tokens, temperature)
+        job = Job(messages, max_tokens, temperature, target=node.name)
         self.jobs[job.id] = job
         self.pending.append(job)
         self._wake.set()
@@ -216,6 +225,7 @@ class Mesh:
             try:
                 await asyncio.wait_for(job.taken.wait(), PICKUP_TIMEOUT_S)
             except asyncio.TimeoutError:
+                node.last_seen = 0   # pull nahi kar raha: mara hua maano (zinda hua to agli pull par khud wapas aa jayega)
                 raise NodeError("not picked up") from None
             while True:
                 try:

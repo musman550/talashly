@@ -534,7 +534,7 @@ class Chat:
         msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
         for h in (history or [])[-6:]:
             if h.get("role") in ("user", "assistant") and h.get("content"):
-                msgs.append({"role": h["role"], "content": str(h["content"])[:2000]})
+                msgs.append({"role": h["role"], "content": str(h["content"])[:9000 if h["role"] == "assistant" else 2000]})
         msgs.append({"role": "user", "content": text})
         got = False
         try:

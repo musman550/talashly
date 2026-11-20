@@ -60,7 +60,7 @@ def is_unclear(text: str) -> bool:
 TASK = re.compile(
     r"^\s*(please |pls |can you |could you |kindly |mujhe |mujy |)?(write|draft|compose|create|make|build|generate|design|"
     r"translate|summari[sz]e|rewrite|fix|debug|code|explain|plan|list|give me|suggest|help me|show me|banao|bana|likho|likh|"
-    r"samjhao|batao)\b", re.I)
+    r"samjhao|batao|edit|upgrade|improve|update|modify|change|add|remove|refactor|optimi[sz]e|continue|extend|redesign|convert)\b", re.I)
 TASK2 = re.compile(   # "ok, but you need to create a website ..." jaise jumlon mein bhi (shuru mein na ho)
     r"\b(create|make|build|write|generate|design|develop|draft|compose|banao|bana|bnao|likho|likh)\b.{0,60}"
     r"\b(web ?site|web ?page|page|app|email|mail|letter|poem|nazm|story|essay|code|script|function|program|resume|cv|logo|plan|report|"

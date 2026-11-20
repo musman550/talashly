@@ -64,8 +64,6 @@ async def sim_node(name="n1", tokens=("Hel", "lo", " world"), delay=0.0, fail_af
         while True:
             job = await MESH.pull(name, "m", 1, wait_s=0.5)
             if not job:
-                if once:
-                    return
                 continue
             for i, t in enumerate(tokens):
                 if fail_after is not None and i == fail_after:
@@ -496,3 +494,41 @@ def test_site_request_falls_back_to_builder_when_llm_dies_midway(tmp_path):
     run = _relay_site(tmp_path, {"die_mid": True})
     (text, m), = asyncio.run(run(["create a website for my bakery"], "mus-7.01-code"))
     assert m == "builder" and "<html" in text.lower(), (m, text[:120])
+
+
+def test_fast_tier_node_gets_the_job_and_busy_fast_node_falls_back_to_slow():
+    async def node(name, tier, served, hold=0.0):
+        async def run():
+            while True:
+                job = await MESH.pull(name, "m", 1, wait_s=0.3, tier=tier)
+                if job:
+                    served.append(name)
+                    MESH.push(job["id"], {"delta": name})
+                    await asyncio.sleep(hold)
+                    MESH.push(job["id"], {"done": True})
+        return asyncio.create_task(run())
+
+    async def go():
+        served = []
+        cpu = await node("cpu", 1, served)
+        gpu = await node("gpu", 3, served, hold=0.6)
+        await asyncio.sleep(0.15)
+        first = "".join(await collect(MESH.stream({"enabled": False}, [])))          # GPU (tez tier) pehle
+        both = await asyncio.gather(collect(MESH.stream({"enabled": False}, [])),    # GPU masroof -> doosra CPU ko
+                                    collect(MESH.stream({"enabled": False}, [])))
+        cpu.cancel(); gpu.cancel()
+        return first, ["".join(b) for b in both], served
+    first, both, served = asyncio.run(go())
+    assert first == "gpu" and sorted(both) == ["cpu", "gpu"], (first, both, served)
+
+
+def test_job_targeted_at_one_node_is_not_stolen_by_another():
+    async def go():
+        MESH.touch("a", tier=3); MESH.touch("b", tier=1)
+        j = M.Job([], 10, 0.1, target="a")
+        MESH.pending.append(j); MESH.jobs[j.id] = j
+        assert await MESH.pull("b", "m", 1, wait_s=0.3) is None      # b ko nahi milta
+        got = await MESH.pull("a", "m", 1, wait_s=0.3)
+        return got
+    got = asyncio.run(go())
+    assert got and got["id"]

@@ -148,7 +148,7 @@ def bring_up():
 async def serve(proc, kind):
     from engine.relaynode import RelayWorker
     w = RelayWorker(SITE, SECRET, "http://127.0.0.1:8081", name=NAME, model="qwen3", slots=2,
-                    max_runtime_s=max(60.0, HOURS * 3600 - (time.time() - T0)), log=log)
+                    max_runtime_s=max(60.0, HOURS * 3600 - (time.time() - T0)), log=log, tier=3 if kind == "gpu" else 1)
 
     async def watchdog():   # llama mar jaye to notebook khatam: guard naya chala dega
         while w.should_run():
