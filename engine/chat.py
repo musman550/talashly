@@ -510,8 +510,8 @@ class Chat:
             yield "token", build_site(text)
             yield "done", {"mode": "builder"}
             return
-        if model.deep:
-            return  # Deep: hamesha research + sources
+        if model.deep and not (ready and intent(text) == "task"):
+            return  # Deep: sawal ho to research + sources; "email likho / poem / code" jaisa kaam ho aur LLM zinda ho to seedha LLM (research bekaar aur sust)
         if not ready:
             for fn in (lambda: poem(text), lambda: compare(text, self.searcher)):
                 got = fn()

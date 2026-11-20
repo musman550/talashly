@@ -258,9 +258,9 @@ def build_site(tmp_path, **chat):
     return cfg, create_app(cfg, seeds=[], sources=[], crawl=False)
 
 
-async def ask(client, q, history=None):
+async def ask(client, q, history=None, model="mus-7.01"):
     text, mode, ev = "", None, None
-    async with client.stream("POST", "/api/chat", json={"message": q, "private": True, "model": "mus-7.01", "history": history or []},
+    async with client.stream("POST", "/api/chat", json={"message": q, "private": True, "model": model, "history": history or []},
                              headers={"X-Client-Id": "t1"}, timeout=30) as r:
         assert r.status_code == 200, r.status_code
         async for line in r.aiter_lines():
@@ -408,3 +408,28 @@ def test_real_http_load_with_flapping_node(tmp_path):
     assert max(r[3] for r in results) < 90, max(r[3] for r in results)
     modes = {r[2] for r in results}
     assert "llm-direct" in modes, modes       # node ne asli kaam bhi kiya
+
+
+def test_deep_mode_task_goes_straight_to_llm_but_questions_still_research(tmp_path):
+    cfg, app = build_site(tmp_path)
+    async def go():
+        async with app.router.lifespan_context(app):
+            M.MESH.secret = "s" * 32
+            w = RelayWorker("http://site.test", "s" * 32, "http://llm.test", slots=1, flush_s=0.01, log=lambda *a: None)
+            w._tr = Router(app, make_fake_llama({}))
+            c = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://site.test")
+            task = asyncio.create_task(w.run())
+            for _ in range(60):
+                if MESH.has_alive():
+                    break
+                await asyncio.sleep(0.1)
+            t0 = time.time()
+            a = await ask(c, "write a short email to my landlord about a leaking roof", model="mus-7.01-deep")
+            dt = time.time() - t0
+            b = await ask(c, "what does a polite crawler do", model="mus-7.01-deep")
+            w.stop = True
+            await asyncio.wait_for(task, 30)
+            return a, b, dt
+    a, b, dt = asyncio.run(go())
+    assert a[1] == "llm-direct" and a[0].startswith("NODE says:") and dt < 5, (a, dt)
+    assert b[1] != "llm-direct", b

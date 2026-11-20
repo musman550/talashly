@@ -68,10 +68,10 @@ jobs:
         run: |
           set -e
           model="$MODEL_URL"
-          if [ -z "$model" ]; then
-            model="https://github.com/${{ github.repository }}/releases/download/model-latest/talashly-qwen3-1.7b-Q4_K_M.gguf"
-            code=$(curl -s -o /dev/null -w '%{http_code}' -I -L -m 20 "$model" || echo 000)
-            [ "$code" = "200" ] || model="https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"
+          if [ -z "$model" ]; then   # apna trained Talashly model Release mein ho to wohi pehle; warna node khud Qwen3 download karta hai
+            rel="https://github.com/${{ github.repository }}/releases/download/model-latest/talashly-qwen3-1.7b-Q4_K_M.gguf"
+            code=$(curl -s -o /dev/null -w '%{http_code}' -I -L -m 20 "$rel" || echo 000)
+            [ "$code" = "200" ] && model="$rel"
           fi
           pick=""; running=0
           for slug in talashly-node-a talashly-node-b; do

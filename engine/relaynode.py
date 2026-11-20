@@ -48,6 +48,7 @@ class RelayWorker:
 
     async def _serve(self, c: httpx.AsyncClient, job: dict):
         buf, last, cancelled = "", time.time(), False
+        t0, first, nchar = time.time(), None, 0
         payload = {"messages": job["messages"], "stream": True, "temperature": job.get("temperature", 0.5),
                    "max_tokens": min(int(job.get("max_tokens", 1500)), 4096)}
         if self.model:
@@ -86,6 +87,9 @@ class RelayWorker:
                         except (KeyError, ValueError, IndexError, TypeError):
                             continue
                         if d:
+                            if first is None:
+                                first = time.time() - t0
+                            nchar += len(d)
                             buf += d
                         if buf and (time.time() - last >= self.flush_s or len(buf) > 200):
                             await flush()
@@ -94,10 +98,12 @@ class RelayWorker:
                             return
             await flush(final=True)
             self.served += 1
+            self.log(f"[relay] job ok: first token {first or 0:.1f}s, {nchar} chars, total {time.time() - t0:.1f}s")
         except PermissionError:
             raise
         except Exception as e:  # noqa: BLE001  local LLM/network ki galti: server ko batao (wo agla node/fallback lega)
             self.errors += 1
+            self.log(f"[relay] job error: {type(e).__name__}: {str(e)[:120]}")
             try:
                 await flush(error=f"{type(e).__name__}: {e}"[:150])
             except Exception:  # noqa: BLE001
@@ -105,13 +111,13 @@ class RelayWorker:
 
     async def _puller(self, i: int):
         back, denied = 1.0, 0
-        async with self._client(35) as c:
+        async with self._client(30) as c:
             while self.should_run():
                 try:
                     if not await self.llm_ready():
                         await asyncio.sleep(3)
                         continue
-                    res = await self._post(c, "/api/mesh/pull", {"node": self.name, "model": self.model, "slots": self.slots, "wait_s": 20})
+                    res = await self._post(c, "/api/mesh/pull", {"node": self.name, "model": self.model, "slots": self.slots, "wait_s": 12})
                     back, denied = 1.0, 0
                     if res.get("job"):
                         await self._serve(c, res["job"])

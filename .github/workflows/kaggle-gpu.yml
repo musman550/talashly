@@ -1,0 +1,66 @@
+name: kaggle-gpu
+# Roz ek baar ~3.5 ghante ka GPU LLM-node (Kaggle T4/P100, bara Qwen3-8B, bohat tez). Kaggle ka GPU quota ~30 ghante/hafta (account settings mein dekhein),
+# 3.5 h x 7 = ~25 h, isliye training ke liye kam bachta hai - zaroorat ho to cron kam kar dein. Mesh khud sab se tez node ko pehle istemal karta hai.
+on:
+  schedule:
+    - cron: "30 9 * * *"     # 14:30 Pakistan time
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: "Kitne ghante chalana hai"
+        default: "3.5"
+permissions:
+  contents: read
+concurrency:
+  group: kaggle-gpu
+  cancel-in-progress: false
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      MESH_SECRET: ${{ secrets.MESH_SECRET }}
+      SITE_URL: ${{ vars.AUTOPILOT_URL || 'http://137.23.39.13:8000' }}
+    steps:
+      - name: Secrets check
+        id: sec
+        run: |
+          if [ -z "$KAGGLE_KEY" ] || [ -z "$KAGGLE_USERNAME" ] || [ -z "$MESH_SECRET" ]; then
+            echo "::warning::KAGGLE_USERNAME / KAGGLE_KEY / MESH_SECRET mein se koi secret nahi mila - skip"; echo "ok=false" >> "$GITHUB_OUTPUT"
+          else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.sec.outputs.ok == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.sec.outputs.ok == 'true'
+        with:
+          python-version: "3.12"
+      - name: Kaggle login
+        if: steps.sec.outputs.ok == 'true'
+        run: |
+          pip install -q kaggle six
+          mkdir -p ~/.kaggle
+          if [[ "$KAGGLE_KEY" == KGAT_* ]]; then
+            printf '%s' "$KAGGLE_KEY" > ~/.kaggle/access_token
+            echo "KAGGLE_API_TOKEN=$KAGGLE_KEY" >> "$GITHUB_ENV"
+          else
+            printf '{"username":"%s","key":"%s"}' "$KAGGLE_USERNAME" "$KAGGLE_KEY" > ~/.kaggle/kaggle.json
+          fi
+          chmod 600 ~/.kaggle/* || true
+      - name: Push the GPU node notebook
+        if: steps.sec.outputs.ok == 'true'
+        run: |
+          set -e
+          slug=talashly-gpu
+          s=$(kaggle kernels status "$KAGGLE_USERNAME/$slug" 2>&1 || true); echo "$s"
+          if echo "$s" | grep -qiE "running|queued"; then echo "GPU node pehle se chal raha hai"; exit 0; fi
+          model=""
+          rel="https://github.com/${{ github.repository }}/releases/download/model-latest/talashly-qwen3-1.7b-Q4_K_M.gguf"
+          mkdir -p kernel && cp kaggle/node/node.py kernel/
+          sed -e "s|__USER__|$KAGGLE_USERNAME|g" -e "s|__SLUG__|$slug|g" kaggle/node/kernel-metadata-gpu.json > kernel/kernel-metadata.json
+          sed -i -e "s|__SITE__|$SITE_URL|g" -e "s|__SECRET__|$MESH_SECRET|g" -e "s|__MODEL_URL__||g" -e "s|__HOURS__|${{ github.event.inputs.hours || '3.5' }}|g" -e "s|__SLUG__|$slug|g" kernel/node.py
+          ok=0
+          for i in 1 2 3; do if kaggle kernels push -p kernel; then ok=1; break; else echo "retry $i"; sleep 20; fi; done
+          if [ "$ok" != "1" ]; then echo "::error::Kaggle par push nahi hua"; exit 1; fi
+          echo "started $slug"
