@@ -42,7 +42,7 @@ jobs:
           cache: pip
       - name: Install
         if: steps.sec.outputs.ok == 'true'
-        run: pip install -r requirements.txt kaggle
+        run: pip install -r requirements.txt kaggle six
       - name: Kaggle login
         if: steps.sec.outputs.ok == 'true'
         run: |

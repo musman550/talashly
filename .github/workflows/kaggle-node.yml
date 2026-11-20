@@ -53,7 +53,8 @@ jobs:
       - name: Kaggle login
         if: steps.need.outputs.start == 'true'
         run: |
-          pip install -q kaggle
+          pip install -q kaggle six
+          kaggle --version
           mkdir -p ~/.kaggle
           if [[ "$KAGGLE_KEY" == KGAT_* ]]; then
             printf '%s' "$KAGGLE_KEY" > ~/.kaggle/access_token
@@ -84,5 +85,7 @@ jobs:
           mkdir -p kernel && cp kaggle/node/node.py kernel/
           sed -e "s|__USER__|$KAGGLE_USERNAME|g" -e "s|__SLUG__|$pick|g" kaggle/node/kernel-metadata.json > kernel/kernel-metadata.json
           sed -i -e "s|__SITE__|$SITE_URL|g" -e "s|__SECRET__|$MESH_SECRET|g" -e "s|__MODEL_URL__|$model|g" -e "s|__HOURS__|10.5|g" -e "s|__SLUG__|$pick|g" kernel/node.py
-          for i in 1 2 3; do kaggle kernels push -p kernel && break || { echo "retry $i"; sleep 20; }; done
+          ok=0
+          for i in 1 2 3; do if kaggle kernels push -p kernel; then ok=1; break; else echo "retry $i"; sleep 20; fi; done
+          if [ "$ok" != "1" ]; then echo "::error::Kaggle par push nahi hua (upar ka error dekho)"; exit 1; fi
           echo "started $pick"
