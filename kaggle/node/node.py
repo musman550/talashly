@@ -40,12 +40,18 @@ def main():
     sh("pip install -q httpx")
     sh(f"git clone --depth 1 https://github.com/musman550/talashly {W}/repo")
     sys.path.insert(0, f"{W}/repo")
-    # 1) llama.cpp prebuilt (CPU)
-    rel = json.load(urllib.request.urlopen(urllib.request.Request(
-        "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest", headers={"User-Agent": "talashly-node"}), timeout=30))
-    asset = next(a for a in rel["assets"] if "bin-ubuntu-x64" in a["name"] and a["name"].endswith(".zip") and "vulkan" not in a["name"] and "rocm" not in a["name"])
-    fetch(asset["browser_download_url"], f"{W}/llama.zip")
-    sh(f"cd {W} && unzip -q -o llama.zip -d llama")
+    # 1) llama.cpp prebuilt (CPU): naam/format badalta rehta hai (.zip/.tar.gz) -> pichhle kuch releases mein se pehla jis mein ubuntu-x64 CPU build ho
+    import re
+    rels = json.load(urllib.request.urlopen(urllib.request.Request(
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=15", headers={"User-Agent": "talashly-node"}), timeout=30))
+    pat = re.compile(r"^llama-.*-bin-ubuntu-x64\.(tar\.gz|zip)$")
+    asset = next((a for r in rels for a in r.get("assets", []) if pat.match(a["name"])), None)
+    if not asset:
+        raise SystemExit("llama.cpp ubuntu-x64 build nahi mili")
+    arc = f"{W}/llama_arc" + (".zip" if asset["name"].endswith(".zip") else ".tar.gz")
+    fetch(asset["browser_download_url"], arc)
+    os.makedirs(f"{W}/llama", exist_ok=True)
+    sh(f"cd {W} && " + (f"unzip -q -o {arc} -d llama" if arc.endswith(".zip") else f"tar -xzf {arc} -C llama"))
     server = glob.glob(f"{W}/llama/**/llama-server", recursive=True)[0]
     os.chmod(server, 0o755)
     libdir = os.path.dirname(server)
