@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # VM par chalta hai: kaun sa code live hai, load, build chal raha hai?, mesh, aur asli chat ka waqt. Sirf padhta hai, kuch badalta nahi.
-cd "$(dirname "$0")/.." 2>/dev/null || cd ~/talashly
+cd ~/talashly 2>/dev/null || cd "$(dirname "$0")/.."
 echo "== code (VM)";            git log -1 --format='%h %cd %s' --date=iso 2>/dev/null
 echo "== code (GitHub)";        git fetch -q origin main 2>/dev/null; git log -1 --format='%h %cd %s' --date=iso origin/main 2>/dev/null
 echo "== load / RAM";           uptime; free -m | sed -n 1,3p
