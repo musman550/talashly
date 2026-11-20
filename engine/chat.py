@@ -510,7 +510,7 @@ class Chat:
             yield "token", build_site(text)
             yield "done", {"mode": "builder"}
             return
-        if model.deep and not (ready and intent(text) == "task"):
+        if model.deep and not (ready and (site or intent(text) == "task")):
             return  # Deep: sawal ho to research + sources; "email likho / poem / code" jaisa kaam ho aur LLM zinda ho to seedha LLM (research bekaar aur sust)
         if not ready:
             for fn in (lambda: poem(text), lambda: compare(text, self.searcher)):
@@ -538,7 +538,7 @@ class Chat:
         msgs.append({"role": "user", "content": text})
         got = False
         try:
-            async for tok in stream_chat(llm, msgs):
+            async for tok in stream_chat(llm, msgs, max_tokens=4000 if (site or CREATIVE.search(text) or "html" in text.lower()) else 1500):
                 got = True
                 yield "token", tok
             if got:
@@ -546,6 +546,10 @@ class Chat:
                 return
         except Exception as e:  # noqa: BLE001
             self.db.log("heal", f"llm direct failed {type(e).__name__}: {e}")
+            if got and site:   # adhoora HTML dikhane se behtar: builder ka poora, chalta hua page
+                yield "replace", build_site(text)
+                yield "done", {"mode": "builder"}
+                return
             if got:
                 yield "token", "\n\n" + tr("error", text)
                 yield "done", {"mode": "error"}

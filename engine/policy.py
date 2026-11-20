@@ -61,12 +61,16 @@ TASK = re.compile(
     r"^\s*(please |pls |can you |could you |kindly |mujhe |mujy |)?(write|draft|compose|create|make|build|generate|design|"
     r"translate|summari[sz]e|rewrite|fix|debug|code|explain|plan|list|give me|suggest|help me|show me|banao|bana|likho|likh|"
     r"samjhao|batao)\b", re.I)
+TASK2 = re.compile(   # "ok, but you need to create a website ..." jaise jumlon mein bhi (shuru mein na ho)
+    r"\b(create|make|build|write|generate|design|develop|draft|compose|banao|bana|bnao|likho|likh)\b.{0,60}"
+    r"\b(web ?site|web ?page|page|app|email|mail|letter|poem|nazm|story|essay|code|script|function|program|resume|cv|logo|plan|report|"
+    r"post|caption|slogan|haiku|html|css)\b", re.I)
 WEB_Q = re.compile(r"\b(latest|news|today|current|price|weather|score|who is|what is|when did|where is|how many|define|meaning)\b", re.I)
 
 
 def intent(text: str) -> str:
     """'task' (kuch banana/likhna), warna 'question'. Website ka alag builder hai (builder.wants_site)."""
-    if TASK.search(text) and not WEB_Q.search(text):
+    if (TASK.search(text) or TASK2.search(text)) and not WEB_Q.search(text):
         return "task"
     return "question"
 

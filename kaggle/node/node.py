@@ -109,8 +109,8 @@ def get_model(urls: list[str]) -> str:
 def start_server(server: str, model: str, gpu: bool):
     libdir = os.path.dirname(server)
     env = dict(os.environ, LD_LIBRARY_PATH=libdir + ":" + os.environ.get("LD_LIBRARY_PATH", ""))
-    # ctx 8192, 2 slot => har slot 4096 (Deep ke lambe prompt ke liye)
-    args = [server, "-m", model, "--host", "127.0.0.1", "--port", "8081", "-c", "8192", "--parallel", "2", "-t", str(os.cpu_count() or 4)]
+    # 2 slot: har slot ko aadha ctx. GPU par 16384 (har slot 8192: poori website jaisa lamba jawab), CPU par 8192
+    args = [server, "-m", model, "--host", "127.0.0.1", "--port", "8081", "-c", "16384" if gpu else "8192", "--parallel", "2", "-t", str(os.cpu_count() or 4)]
     if gpu:
         args += ["-ngl", "99"]
     logf = open(f"{W}/llama.log", "a")

@@ -461,3 +461,38 @@ def test_slow_search_does_not_block_the_server(tmp_path, monkeypatch):
             return lat
     lat = asyncio.run(go())
     assert max(lat) < 0.6, lat
+
+
+def _relay_site(tmp_path, mode):
+    cfg, app = build_site(tmp_path)
+    async def run(qs, model):
+        async with app.router.lifespan_context(app):
+            M.MESH.secret = "s" * 32
+            w = RelayWorker("http://site.test", "s" * 32, "http://llm.test", slots=1, flush_s=0.0, log=lambda *a: None)
+            w._tr = Router(app, make_fake_llama(mode))
+            c = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://site.test")
+            task = asyncio.create_task(w.run())
+            for _ in range(60):
+                if MESH.has_alive():
+                    break
+                await asyncio.sleep(0.1)
+            res = [await ask(c, q, model=model) for q in qs]
+            w.stop = True
+            await asyncio.wait_for(task, 30)
+            return res
+    return run
+
+
+def test_every_model_sends_tasks_to_llm_and_phrasing_variants_are_tasks(tmp_path):
+    qs = ["ok, but you need to create simple professional website there showing premiume clothes and shose with prices html",
+          "need html website", "banao ik email landlord ke liye", "can you write a poem about rain"]
+    run = _relay_site(tmp_path, {})
+    for model in ("mus-7.01-flash", "mus-7.01", "mus-7.01-deep", "mus-7.01-code"):
+        for (text, m), q in zip(asyncio.run(run(qs, model)), qs):
+            assert m == "llm-direct" and text.startswith("NODE says:"), (model, q, m, text[:80])
+
+
+def test_site_request_falls_back_to_builder_when_llm_dies_midway(tmp_path):
+    run = _relay_site(tmp_path, {"die_mid": True})
+    (text, m), = asyncio.run(run(["create a website for my bakery"], "mus-7.01-code"))
+    assert m == "builder" and "<html" in text.lower(), (m, text[:120])
