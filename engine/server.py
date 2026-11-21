@@ -291,6 +291,8 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
         if d.get("bye"):
             MESH.drop(name)
             return {"job": None}
+        if d.get("probe"):   # sirf "signature + raasta theek hai?" - koi job nahi uthata, node ko zinda nahi dikhata
+            return {"job": None, "probe": True}
         job = await MESH.pull(name, str(d.get("model", "")), int(d.get("slots", 1) or 1), wait_s=min(25.0, float(d.get("wait_s", 20))), tier=int(d.get("tier", 1) or 1))
         return {"job": job}
 

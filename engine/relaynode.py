@@ -42,6 +42,22 @@ class RelayWorker:
     def should_run(self) -> bool:
         return not self.stop and not (self.deadline and time.time() > self.deadline)
 
+    async def probe(self) -> None:
+        """Jaanch: Kaggle se VM tak raasta kaisa hai? (waqt aur nateeja log mein - ReadTimeout ki wajah dhoondne ke liye)"""
+        for label, method, path in (("health", "GET", "/api/health"), ("mesh/status", "GET", "/api/mesh/status"), ("signed pull", "POST", "/api/mesh/pull")):
+            t0 = time.time()
+            try:
+                async with self._client(20) as c:
+                    if method == "GET":
+                        r = await c.get(self.site + path)
+                        out = f"HTTP {r.status_code} {r.text[:110]!r}"
+                    else:
+                        res = await self._post(c, path, {"node": self.name, "model": self.model, "slots": self.slots, "probe": True})
+                        out = f"ok {str(res)[:60]}"
+            except Exception as e:  # noqa: BLE001
+                out = f"FAIL {type(e).__name__}: {str(e)[:80]}"
+            self.log(f"[probe] {label}: {out} ({time.time() - t0:.1f}s)")
+
     async def llm_ready(self) -> bool:
         try:
             async with self._client(5) as c:
@@ -113,15 +129,17 @@ class RelayWorker:
                 pass
 
     async def _puller(self, i: int):
-        back, denied = 1.0, 0
-        async with self._client(30) as c:
+        back, denied, fails = 1.0, 0, 0
+        if i == 0:
+            await self.probe()
+        async with self._client(15) as c:
             while self.should_run():
                 try:
                     if not await self.llm_ready():
                         await asyncio.sleep(3)
                         continue
-                    res = await self._post(c, "/api/mesh/pull", {"node": self.name, "model": self.model, "slots": self.slots, "wait_s": 12, "tier": self.tier})
-                    back, denied = 1.0, 0
+                    res = await self._post(c, "/api/mesh/pull", {"node": self.name, "model": self.model, "slots": self.slots, "wait_s": 3, "tier": self.tier})
+                    back, denied, fails = 1.0, 0, 0
                     if res.get("job"):
                         await self._serve(c, res["job"])
                 except PermissionError as e:
@@ -133,6 +151,9 @@ class RelayWorker:
                     await asyncio.sleep(1.0)
                 except Exception as e:  # noqa: BLE001  VM band/network: dheere dheere dobara
                     self.log(f"[relay] {type(e).__name__}: {str(e)[:100]} (retry {back:.0f}s)")
+                    fails += 1
+                    if i == 0 and fails in (3, 20):
+                        await self.probe()    # lagataar nakami: raaste ka haal log mein
                     await asyncio.sleep(back)
                     back = min(30.0, back * 2)
 
