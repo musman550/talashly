@@ -388,7 +388,10 @@ def test_real_http_load_with_flapping_node(tmp_path):
             await asyncio.sleep(0.1)
         assert M.MESH.has_alive()
         batch1 = [asyncio.create_task(user(i)) for i in range(20)]
-        await asyncio.sleep(0.15)
+        for _ in range(100):              # pehle kam az kam ek jawab asli node se aane do (nayi connection har request: waqt lagta hai)
+            if any(r[2] == "llm-direct" for r in results):
+                break
+            await asyncio.sleep(0.1)
         mode["http500"] = True            # local LLM beech mein kharab
         await asyncio.sleep(0.4)
         mode["http500"] = False
