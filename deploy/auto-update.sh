@@ -6,6 +6,8 @@ DIR="${DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 cd "$DIR" || exit 0
 git config --global --add safe.directory "$DIR" 2>/dev/null   # root se chalne par "dubious ownership" se git chup-chaap fail na ho
 CHANGED=0
+# autopilot VM ke bohat chhote CPU ko khata hai: default band (AUTOPILOT_ON=1 ho to chalne do)
+[ "${AUTOPILOT_ON:-0}" = "1" ] || docker compose rm -sf autopilot >/dev/null 2>&1 || true
 if git fetch --quiet origin main 2>/dev/null; then
   LOCAL="$(git rev-parse HEAD)"; REMOTE="$(git rev-parse origin/main)"
   if [ "$LOCAL" != "$REMOTE" ]; then

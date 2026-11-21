@@ -26,7 +26,9 @@ class RelayWorker:
         self._tr = None   # tests ke liye transport
 
     def _client(self, timeout=40.0):
-        return httpx.AsyncClient(timeout=timeout, transport=self._tr)
+        # Har request nayi connection: purani (idle) connection ko NAT/firewall chup-chaap tod deta hai aur wo ReadTimeout tak latki rehti hai
+        return httpx.AsyncClient(timeout=timeout, transport=self._tr, headers={"Connection": "close"},
+                                 limits=httpx.Limits(max_keepalive_connections=0))
 
     async def _post(self, c: httpx.AsyncClient, path: str, obj: dict) -> dict:
         obj = {**obj, "nonce": secrets.token_hex(6)}   # har request ka sig alag (replay-guard se do slots na takraen)

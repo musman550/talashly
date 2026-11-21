@@ -9,6 +9,7 @@ cp -n config.toml /tmp/config.toml.vm-backup 2>/dev/null
 git fetch -q origin main && git reset --hard -q origin/main
 echo "== ab:     $(git log -1 --format='%h %s')"
 sudo docker compose pull -q 2>&1 | tail -2
+sudo docker compose rm -sf autopilot >/dev/null 2>&1   # VM ka CPU bohat chhota: autopilot yahan band (Action se test hota hai)
 sudo docker compose up -d 2>&1 | tail -4
 for i in $(seq 1 30); do
   if curl -fsS -m 10 http://127.0.0.1:8000/api/health >/dev/null 2>&1; then echo "== health OK ($((i*5))s)"; break; fi

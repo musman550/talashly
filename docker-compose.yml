@@ -21,6 +21,7 @@ services:
   # Autopilot: 24/7 khud sawal banata, search service se poochta, yaad rakhta, report likhta (data/autopilot/report.md).
   # Chat/API/tokens ki zaroorat nahi. Band karna ho: docker compose stop autopilot
   autopilot:
+    profiles: ["autopilot"]   # VM (Oracle Micro, 1/8 CPU) par default band: chalane ke liye `docker compose --profile autopilot up -d autopilot`. GitHub Action har ghante khud test karta hai.
     image: ghcr.io/musman550/talashly:latest
     build: .
     restart: unless-stopped
