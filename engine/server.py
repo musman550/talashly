@@ -118,6 +118,7 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         MESH.secret = load_secret(cfg["_data_dir"])
+        _lag_task = asyncio.create_task(MESH.watch_loop())
         key = ensure_admin(db, cfg["_data_dir"])
         if key:
             print(f"\n[!] Admin API key bana di gayi: {Path(cfg['_data_dir']) / 'admin_key.txt'}\n")
@@ -125,6 +126,7 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
         if cfg["code"]["paths"]:
             asyncio.get_running_loop().run_in_executor(None, brain._index_code, cfg["code"]["paths"])
         yield
+        _lag_task.cancel()
         await sup.stop()
 
     app = FastAPI(title="Talashly", lifespan=lifespan)

@@ -102,6 +102,7 @@ class Mesh:
         self._breaker: dict[str, list] = {}   # key -> [fails, until]
         self.stats = collections.Counter()
         self.last_pull = 0.0
+        self.lag = collections.deque(maxlen=120)   # (waqt, event-loop kitni der atka ms)
 
     # ------------------------------------------------------------ auth
     def verify(self, method: str, path: str, body: bytes, ts: str | None, sig: str | None) -> bool:
@@ -198,7 +199,8 @@ class Mesh:
         s = {"nodes_alive": len(al), "oldest_age_s": max((round(time.time() - n.first_seen) for n in al), default=0),
              "cpu_alive": len(cpu), "cpu_oldest_age_s": max((round(time.time() - n.first_seen) for n in cpu), default=0),
              "pending": len(self.pending), "pulls": self.stats["pulls"],
-             "last_pull_age_s": round(time.time() - self.last_pull) if self.last_pull else None}
+             "last_pull_age_s": round(time.time() - self.last_pull) if self.last_pull else None,
+             "loop_lag_ms_max_60s": max((ms for t, ms in self.lag if time.time() - t < 60), default=None)}
         if detail:
             s["nodes"] = [n.info() for n in self.nodes.values()]
             s["stats"] = dict(self.stats)
@@ -308,6 +310,14 @@ class Mesh:
                     raise
         self.stats["no_node"] += 1
         raise NodeError(f"no llm node available ({last})" if last else "no llm node available")
+
+
+    async def watch_loop(self):
+        """Har 0.5 s sone ki koshish; asal mein jitni der zyada soye utna loop atka tha (CPU-bhooka server pakadne ke liye)."""
+        while True:
+            t0 = time.perf_counter()
+            await asyncio.sleep(0.5)
+            self.lag.append((time.time(), max(0.0, (time.perf_counter() - t0 - 0.5) * 1000)))
 
 
 MESH = Mesh()

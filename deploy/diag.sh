@@ -5,6 +5,9 @@ echo "== code (VM)";            git log -1 --format='%h %cd %s' --date=iso 2>/de
 echo "== code (GitHub)";        git fetch -q origin main 2>/dev/null; git log -1 --format='%h %cd %s' --date=iso origin/main 2>/dev/null
 echo "== load / RAM";           uptime; free -m | sed -n 1,3p
 echo "== docker build chal raha?"; (pgrep -af 'docker.*build|buildx|buildkit' | head -3) || true; echo "(upar kuch na ho to build nahi chal raha)"
+echo "== CPU steal/load (st = Oracle ne CPU roka; wa = disk intezar)"; vmstat 1 4 | tail -4
+echo "== sab se bhari process"; ps aux --sort=-%cpu | head -5 | cut -c1-140
+echo "== 6 baar mesh/status ka waqt (atakna dikhega)"; for i in 1 2 3 4 5 6; do curl -s -o /dev/null -m 20 -w '%{time_total}s ' http://127.0.0.1:8000/api/mesh/status; sleep 1; done; echo
 echo "== containers";           sudo docker compose ps 2>/dev/null | cut -c1-150
 echo "== CPU/RAM per container"; sudo docker stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}}' 2>/dev/null
 echo "== image (GHCR se aayi ya local build?)"; sudo docker images --format '{{.Repository}}:{{.Tag}} {{.CreatedSince}}' | head -4

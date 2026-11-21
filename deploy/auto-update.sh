@@ -12,7 +12,9 @@ if git fetch --quiet origin main 2>/dev/null; then
   LOCAL="$(git rev-parse HEAD)"; REMOTE="$(git rev-parse origin/main)"
   if [ "$LOCAL" != "$REMOTE" ]; then
     echo "$(date -u +%FT%TZ) code update $LOCAL -> $REMOTE"
+    CFG_CHANGED=0; git diff --quiet "$LOCAL" "$REMOTE" -- config.toml seeds.toml 2>/dev/null || CFG_CHANGED=1
     git reset --hard origin/main --quiet && CHANGED=1
+    [ "$CFG_CHANGED" = "1" ] && { echo "config badla: search restart"; docker compose restart search >/dev/null 2>&1 || true; }
   fi
 fi
 if docker compose pull --quiet search 2>/dev/null; then
