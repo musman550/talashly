@@ -41,8 +41,8 @@ jobs:
             echo "::warning::GitHub se site tak nahi pahunch saka - Kaggle ki apni halat dekh kar chalayenge"
             echo "start=true" >> "$GITHUB_OUTPUT"; echo "blind=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          alive=$(echo "$st" | python3 -c 'import sys,json;print(json.load(sys.stdin)["nodes_alive"])')
-          age=$(echo "$st" | python3 -c 'import sys,json;print(json.load(sys.stdin)["oldest_age_s"])')
+          alive=$(echo "$st" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("cpu_alive",d["nodes_alive"]))')
+          age=$(echo "$st" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("cpu_oldest_age_s",d["oldest_age_s"]))')
           if [ "$alive" = "0" ] || { [ "$alive" = "1" ] && [ "$age" -gt 37800 ]; }; then echo "start=true" >> "$GITHUB_OUTPUT"; else echo "start=false" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/checkout@v4
         if: steps.need.outputs.start == 'true'

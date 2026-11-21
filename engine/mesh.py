@@ -191,7 +191,9 @@ class Mesh:
 
     def status(self, detail: bool = False) -> dict:
         al = self.alive_relays()
+        cpu = [n for n in al if n.tier <= 1]    # hamesha-chalne wala CPU node (GPU sirf kuch ghante)
         s = {"nodes_alive": len(al), "oldest_age_s": max((round(time.time() - n.first_seen) for n in al), default=0),
+             "cpu_alive": len(cpu), "cpu_oldest_age_s": max((round(time.time() - n.first_seen) for n in cpu), default=0),
              "pending": len(self.pending)}
         if detail:
             s["nodes"] = [n.info() for n in self.nodes.values()]
