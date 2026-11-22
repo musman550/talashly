@@ -4,6 +4,7 @@ name: kaggle-train
 on:
   schedule:
     - cron: "30 2 * * 0"
+    - cron: "30 2 * * 3"     # GitHub cron kabhi chhoot jata hai (22 Nov ko chhuta): Budh ko dobara; model 6 din se naya ho to khud skip
   workflow_dispatch:
     inputs:
       passages:
@@ -32,6 +33,10 @@ jobs:
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            age=$(gh api "repos/${{ github.repository }}/releases/tags/model-latest" -q '(now - (.published_at|fromdate))|floor' 2>/dev/null || echo 99999999)
+            if [ "$age" -lt 518400 ]; then echo "::notice::model sirf $((age/3600)) ghante purana hai - is hafte training ho chuki, skip"; echo "ok=false" >> "$GITHUB_OUTPUT"; fi
           fi
       - uses: actions/checkout@v4
         if: steps.sec.outputs.ok == 'true'

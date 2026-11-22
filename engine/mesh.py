@@ -24,7 +24,7 @@ import httpx
 
 PULL_TTL_S = 45          # itni der se pull na aaye to node mara hua
 PICKUP_TIMEOUT_S = 4.0   # job itni der mein na uthe to agla node/fallback
-FIRST_TOKEN_S = 60.0     # CPU par prompt process hone mein waqt lagta hai
+FIRST_TOKEN_S = 30.0     # chhota prompt (3 source) CPU par ~5-10 s; isse der ho to agla node/fallback, user 60 s na ruke
 CHUNK_TIMEOUT_S = 25.0
 MAX_PENDING = 8
 SKEW_S = 60

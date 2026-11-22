@@ -331,8 +331,16 @@ BOILER = re.compile(
     r"advertis|newsletter|copyright|\bcookies?\b)", re.I)
 
 
+CTX_HITS = 3      # LLM ko sirf sab se achhe itne sources: CPU par prompt jitna chhota, pehla lafz utna jaldi (6x2 passages = 30-60 s lagte the)
+CTX_CHARS = 450   # har source se itne characters
+
+
+def ctx_hits(hits: list[Hit]) -> list[Hit]:
+    return hits[:CTX_HITS]
+
+
 def llm_prompt(query: str, hits: list[Hit]) -> str:
-    ctx = "\n\n".join(f"[{i}] {h.title} ({h.domain})\n" + "\n".join(h.passages[:2]) for i, h in enumerate(hits[:6], 1))
+    ctx = "\n\n".join(f"[{i}] {h.title} ({h.domain})\n" + " ".join(h.passages[:2])[:CTX_CHARS] for i, h in enumerate(hits[:CTX_HITS], 1))
     return (
         "Neeche diye gaye SOURCES se hi jawab do. Agar sources mein jawab nahi hai to saaf kaho 'sources mein nahi mila'. "
         "Har claim ke baad source number likho jaise [1][2]. Kuch apni taraf se mat banao. "
@@ -344,7 +352,7 @@ def llm_prompt(query: str, hits: list[Hit]) -> str:
 def ground_check(text: str, hits: list[Hit]) -> tuple[str, int]:
     """Jawab ki galtiyan pakadna: bina valid citation ya sources se unrelated jumle hata do.
     (clean_text, kitne jumle hataye) wapas karta hai."""
-    src_words = [set(WORD.findall(p.lower())) for h in hits[:6] for p in [" ".join(h.passages)]]
+    src_words = [set(WORD.findall(p.lower())) for h in hits[:CTX_HITS] for p in [" ".join(h.passages)[:CTX_CHARS]]]
     kept, dropped = [], 0
     for s in [x for x in SENT_SPLIT.split(text) if x and x.strip()]:
         cites = [int(n) for n in re.findall(r"\[(\d+)\]", s)]

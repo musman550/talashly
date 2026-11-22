@@ -378,11 +378,16 @@ class Brain:
         mode = "extractive"
         ans = build_answer(q, hits, sentences or (8 if deep else 5))
         use_llm = llm_available(self.cfg["llm"])
+        search_ms = round((time.time() - t0) * 1000)
         if use_llm:
             buf: list[str] = []
+            t_llm = time.time()
+            first_ms = None
             try:
                 async for tok in stream_chat(self.cfg["llm"], [{"role": "user", "content": llm_prompt(q, hits) + "\n/no_think"}],
                                              max_tokens=600, temperature=0.2):
+                    if first_ms is None:
+                        first_ms = round((time.time() - t_llm) * 1000)
                     buf.append(tok)
                     yield "token", tok
                 text = "".join(buf)
@@ -393,7 +398,7 @@ class Brain:
                     self.db.log("verify", f"llm answer corrected, dropped={dropped}")
                 mode = "llm" if clean else "extractive"
                 yield "done", {"mode": mode, "coverage": round(cov, 2), "citations": ans["citations"],
-                               "took_ms": round((time.time() - t0) * 1000)}
+                               "took_ms": round((time.time() - t0) * 1000), "search_ms": search_ms, "llm_first_ms": first_ms}
                 return
             except Exception as e:  # noqa: BLE001  local model gir gaya: extractive pe wapas
                 self.db.log("heal", f"llm failed ({type(e).__name__}), extractive fallback")
