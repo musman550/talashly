@@ -5,7 +5,22 @@ set -uo pipefail
 for v in OCI_USER OCI_TENANCY OCI_FINGERPRINT OCI_REGION OCI_KEY SSH_PUBKEY MESH_SECRET; do
   [ -n "${!v:-}" ] || { echo "::warning::secret $v nahi mila - A1 skip"; exit 0; }
 done
-mkdir -p ~/.oci && printf '%s\n' "$OCI_KEY" > ~/.oci/key.pem && chmod 600 ~/.oci/key.pem
+mkdir -p ~/.oci
+# Windows se paste: CRLF, upar-neeche khali jagah, ya ek hi line ho sakti hai -> key ko saaf, 64-char lines mein dobara likho
+printf '%s' "$OCI_KEY" | python3 -c "
+import re,sys,textwrap
+k=sys.stdin.read().replace('\r','')
+m=re.search(r'-----BEGIN ([A-Z ]*PRIVATE KEY)-----(.*?)-----END \1-----',k,re.S)
+if not m: sys.exit(3)
+b=re.sub(r'\s+','',m.group(2))
+print('-----BEGIN %s-----'%m.group(1)); print('\n'.join(textwrap.wrap(b,64))); print('-----END %s-----'%m.group(1))
+" > ~/.oci/key.pem
+rc=$?
+chmod 600 ~/.oci/key.pem
+if [ $rc -ne 0 ] || ! openssl pkey -in ~/.oci/key.pem -noout 2>/dev/null; then
+  echo "::error::OCI_KEY secret mein sahi private key nahi hai. Wo '-----BEGIN PRIVATE KEY-----' se shuru aur '-----END PRIVATE KEY-----' par khatam hona chahiye (Oracle se download hui .pem file ka poora text)."; exit 1
+fi
+export SUPPRESS_LABEL_WARNING=True
 cat > ~/.oci/config <<CFG
 [DEFAULT]
 user=$OCI_USER
