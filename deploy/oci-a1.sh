@@ -61,10 +61,15 @@ done
 printf '%s\n' "$SSH_PUBKEY" > /tmp/key.pub
 sed "s|__MESH_SECRET__|$MESH_SECRET|" deploy/a1-cloud-init.sh > /tmp/init.sh
 
-for ad in $(J iam availability-domain list --compartment-id "$T" | python3 -c "import sys,json; print(' '.join(a['name'] for a in json.load(sys.stdin)['data']))"); do
+ADS=$(J iam availability-domain list --compartment-id "$T" | python3 -c "import sys,json; print(' '.join(a['name'] for a in json.load(sys.stdin)['data']))")
+LIMIT_MSG=""
+for cfg in "4 24" "2 12" "1 6"; do   # account ki A1 limit kam ho to chhoti VM bhi theek (chhoti hui to baad mein badh nahi sakti, isliye bari pehle)
+set -- $cfg; OC=$1; MEM=$2
+LIMIT_HIT=0
+for ad in $ADS; do
   echo "try AD $ad"
   res=$(oci compute instance launch --availability-domain "$ad" --compartment-id "$T" --shape VM.Standard.A1.Flex \
-    --shape-config '{"ocpus":4,"memoryInGBs":24}' --subnet-id "$subnet" --image-id "$image" --assign-public-ip true \
+    --shape-config '{"ocpus":'$OC',"memoryInGBs":'$MEM'}' --subnet-id "$subnet" --image-id "$image" --assign-public-ip true \
     --boot-volume-size-in-gbs 100 --ssh-authorized-keys-file /tmp/key.pub --user-data-file /tmp/init.sh \
     --display-name talashly-a1 --output json 2>"$ERR"); res="$res $(head -c 3000 "$ERR")"
   if echo "$res" | grep -q '"lifecycle-state"'; then
@@ -80,9 +85,15 @@ for ad in $(J iam availability-domain list --compartment-id "$T" | python3 -c "i
     echo "  capacity nahi: $(echo "$res" | grep -oiE 'out of[^"]*capacity[^"]*|LimitExceeded|TooManyRequests' | head -1)"; continue
   fi
   if echo "$res" | grep -q "LimitExceeded"; then
-    echo "::error::Oracle limit: $(echo "$res" | tr '\n' ' ' | tr -s ' ' | grep -oE '"message": *"[^"]*"' | head -2)"; exit 1
+    LIMIT_MSG=$(echo "$res" | tr '\n' ' ' | tr -s ' ' | grep -oE '"message": *"[^"]*"' | head -1); LIMIT_HIT=1; echo "  limit: ${OC} OCPU / ${MEM} GB nahi milti, chhoti try"; break
   fi
   echo "::error::launch fail: $(echo "$res" | tr '\n' ' ' | grep -oE '"(code|message)": *"[^"]*"' | head -4 | tr '\n' ' ') || $(echo "$res" | tr '\n' ' ' | tr -s ' ' | head -c 1400)"; exit 1
 done
+[ "$LIMIT_HIT" = 1 ] && continue
+break
+done
+if [ "$LIMIT_HIT" = 1 ]; then
+  echo "::error::Oracle account mein A1 ki limit nahi: $LIMIT_MSG (Console > Governance > Limits, Quotas and Usage > Compute: Standard.A1 cores dekho)"; exit 1
+fi
 echo "abhi capacity nahi - 10 minute baad dobara"
 exit 0
