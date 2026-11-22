@@ -36,6 +36,7 @@ def chat(model, q, timeout=200):
     chunks = 0
     text = ""
     mode = steps = ""
+    dn = {}
     ev = ""
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -65,10 +66,11 @@ def chat(model, q, timeout=200):
                     steps += (d.get("msg", "") if isinstance(d, dict) else str(d))[:60] + " | "
                 elif ev == "done" and isinstance(d, dict):
                     mode = d.get("mode", "")
+                    dn = d
     except Exception as e:  # noqa: BLE001
         return {"model": model, "q": q[:40], "error": f"{type(e).__name__}: {e}", "t": round(time.time() - t0, 1)}
     return {"model": model, "q": q[:40], "first_s": None if first is None else round(first, 1), "total_s": round(time.time() - t0, 1),
-            "chunks": chunks, "max_gap_s": round(gap_max, 1), "chars": len(text), "mode": mode, "steps": steps[:200], "head": text[:90].replace("\n", " ")}
+            "chunks": chunks, "max_gap_s": round(gap_max, 1), "chars": len(text), "mode": mode, "search_ms": dn.get("search_ms"), "llm_first_ms": dn.get("llm_first_ms"), "took_ms": dn.get("took_ms"), "steps": steps[:120], "head": text[:90].replace("\n", " ")}
 
 
 print("SITE", SITE)
