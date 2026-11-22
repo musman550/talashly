@@ -1,5 +1,5 @@
 name: kaggle-gpu
-# Roz ek baar ~3.5 ghante ka GPU LLM-node (Kaggle T4/P100, bara Qwen3-8B, bohat tez). Kaggle ka GPU quota ~30 ghante/hafta (account settings mein dekhein),
+# Roz ek baar ~3.5 ghante ka GPU LLM-node (Kaggle T4/P100, sab se bara Qwen3-14B (na chale to 8B, phir 4B)). Kaggle ka GPU quota ~30 ghante/hafta (account settings mein dekhein),
 # 3.5 h x 7 = ~25 h, isliye training ke liye kam bachta hai - zaroorat ho to cron kam kar dein. Mesh khud sab se tez node ko pehle istemal karta hai.
 on:
   schedule:

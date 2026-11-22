@@ -1,5 +1,5 @@
 # Kaggle notebook = Talashly ka LLM relay-node. Sirf outbound HTTP: koi tunnel/khula port nahi.
-# GPU mile to CUDA llama.cpp + bara Qwen3-8B; warna CPU llama.cpp + chhota (tez) Qwen3-1.7B. Qwen open models ko pehli tarjeeh.
+# GPU mile to CUDA llama.cpp + bara Qwen3-14B (8B/4B fallback); warna CPU llama.cpp + chhota (tez) Qwen3-1.7B. Qwen open models ko pehli tarjeeh.
 # llama-server (127.0.0.1:8081) -> engine.relaynode (Talashly se kaam pull, token push). Workflow placeholders (__...__) bharta hai.
 import asyncio
 import glob
@@ -20,7 +20,7 @@ W = "/kaggle/working"
 T0 = time.time()
 HF = "https://huggingface.co/unsloth"
 CPU_MODELS = [OWN_MODEL, f"{HF}/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf", f"{HF}/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"]
-GPU_MODELS = [f"{HF}/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf", f"{HF}/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"]
+GPU_MODELS = [f"{HF}/Qwen3-14B-GGUF/resolve/main/Qwen3-14B-Q4_K_M.gguf", f"{HF}/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf", f"{HF}/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"]
 
 
 def log(*a):
@@ -69,6 +69,10 @@ def install_llama(kind: str, with_rt: bool = False) -> str:
     rt_pat = r"^cudart-llama-.*-bin-ubuntu-cuda-12\.\d+-x64\.(tar\.gz|zip)$"
     d = f"{W}/llama_{kind}"
     os.makedirs(d, exist_ok=True)
+    if not with_rt:   # pehle se utara hua server dobara download nahi (model badalte waqt)
+        have = glob.glob(f"{d}/**/llama-server", recursive=True)
+        if have:
+            return have[0]
     for r in releases():
         names = {a["name"]: a for a in r.get("assets", [])}
         main = next((a for n, a in names.items() if re.match(pat, n)), None)
@@ -132,16 +136,18 @@ def start_server(server: str, model: str, gpu: bool):
 
 def bring_up():
     if has_gpu():
-        try:
-            log("GPU mili: CUDA build + bara model")
-            model = get_model(GPU_MODELS)
-            try:   # pehle bina cudart (Kaggle image mein CUDA hota hai)
-                return start_server(install_llama("cuda"), model, True), "gpu"
+        for url in GPU_MODELS:   # sab se bara pehle; na chale (download/memory) to agla chhota
+            try:
+                log("GPU mili: CUDA build +", url.rsplit("/", 1)[-1])
+                model = get_model([url])
+                try:   # pehle bina cudart (Kaggle image mein CUDA hota hai)
+                    return start_server(install_llama("cuda"), model, True), "gpu"
+                except Exception as e:  # noqa: BLE001
+                    log("CUDA server bina cudart nahi chala, cudart ke saath:", str(e)[:200])
+                    return start_server(install_llama("cuda", with_rt=True), model, True), "gpu"
             except Exception as e:  # noqa: BLE001
-                log("CUDA server bina cudart nahi chala, cudart ke saath:", str(e)[:200])
-                return start_server(install_llama("cuda", with_rt=True), model, True), "gpu"
-        except Exception as e:  # noqa: BLE001
-            log("GPU raasta fail, CPU par girte hain:", str(e)[:300])
+                log("ye GPU model nahi chala, agla:", str(e)[:300])
+        log("GPU raasta fail, CPU par girte hain")
     return start_server(install_llama("cpu"), get_model(CPU_MODELS), False), "cpu"
 
 
