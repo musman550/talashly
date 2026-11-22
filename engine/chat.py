@@ -21,7 +21,7 @@ from .llm import stream_chat
 from .mesh import llm_available
 from .skills import compare, poem
 from .policy import CREATIVE, intent, is_unclear, policy_check, strip_cites, wants_sources
-from .search import Searcher, coverage, terms
+from .search import Searcher, coverage, detect_script, terms
 
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 CLIENT_ID = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
@@ -521,7 +521,8 @@ class Chat:
                     return
         eq = contextualize(text, prev_user)
         try:
-            weak = coverage(eq, await asyncio.to_thread(self.searcher.search_many, [eq], 8)) < 0.6
+            # non-Latin (Urdu/Arabic/Hindi...) sawal: LLM zinda ho to seedha LLM (index ke ghalat-zaban hits + live research 80 s tak lete the)
+            weak = detect_script(eq) != "latin" or coverage(eq, await asyncio.to_thread(self.searcher.search_many, [eq], 8)) < 0.6
         except Exception:  # noqa: BLE001  search gira: normal rasta apna error-jawab dega
             return
         if not ready:

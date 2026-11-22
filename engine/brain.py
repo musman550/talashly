@@ -64,6 +64,9 @@ def _join_list(parts: list[str]) -> str:
     return ", ".join(parts)
 
 
+NOT_IN_SOURCES = re.compile(r"nahi\s+mila|not\s+(?:found|mentioned|provided|available|covered)|(?:do|does|did)(?:\s+not|n't)\s+(?:contain|mention|provide|include|say)|no\s+(?:relevant\s+)?information|cannot\s+(?:find|answer)", re.I)
+
+
 class Brain:
     def __init__(self, cfg: dict, db: DB, searcher: Searcher, sources: list[dict] | None = None):
         self.cfg, self.db, self.searcher = cfg, db, searcher
@@ -125,7 +128,7 @@ class Brain:
             if len(t) < 3:
                 continue
             t_ = t.replace(" ", "-")
-            for r in self.db.q(
+            for r in self.db.rq(
                 "SELECT url FROM frontier WHERE status='queued' AND kind='page' AND lower(url) LIKE ? "
                 "AND domain NOT IN (SELECT domain FROM domain_state WHERE paused_until>?) LIMIT 60",
                 (f"%{t_.lower()}%", time.time())):
@@ -182,7 +185,7 @@ class Brain:
         ts = terms(q)
         script = detect_script(q)
         cap = self.b["live_fetch_max"]
-        urls = self._frontier_candidates(ts, cap)
+        urls = await asyncio.to_thread(self._frontier_candidates, ts, cap)   # frontier par LIKE scan bhari hai: loop par nahi
         urls += [u for u in self._direct_urls(ts, script) if u not in urls]
         deadline = self.b["live_timeout_s"]
 
@@ -393,9 +396,29 @@ class Brain:
                 text = "".join(buf)
                 clean, dropped = ground_check(text, hits)
                 if dropped or not clean:
+                    self.db.log("verify", f"llm answer corrected, dropped={dropped}, head={text[:160]!r}")
+                    if not clean and NOT_IN_SOURCES.search(text):
+                        # sources sawal se mel hi nahi khate (jaise France ke sawal par Ivory Coast): extractive kachra dikhane ke bajaye
+                        # LLM apne ilm se seedha jawab de (bina sources; chhota, tez)
+                        yield "replace", ""
+                        direct: list[str] = []
+                        try:
+                            async for tok in stream_chat(self.cfg["llm"], [{"role": "user", "content": q + "\n/no_think"}],
+                                                         max_tokens=500, temperature=0.3):
+                                direct.append(tok)
+                                yield "token", tok
+                        except Exception as e:  # noqa: BLE001
+                            self.db.log("heal", f"llm direct fallback failed ({type(e).__name__})")
+                        if "".join(direct).strip():
+                            yield "done", {"mode": "llm-direct", "coverage": round(cov, 2), "took_ms": round((time.time() - t0) * 1000),
+                                           "search_ms": search_ms, "llm_first_ms": first_ms}
+                            return
+                        yield "replace", ans["answer"]
+                        yield "done", {"mode": "extractive", "coverage": round(cov, 2), "citations": ans["citations"],
+                                       "took_ms": round((time.time() - t0) * 1000)}
+                        return
                     # LLM ne source se bahar ya bina citation ke likha: wo hissa hata kar ya extractive se badal do
                     yield "replace", clean or ans["answer"]
-                    self.db.log("verify", f"llm answer corrected, dropped={dropped}")
                 mode = "llm" if clean else "extractive"
                 yield "done", {"mode": mode, "coverage": round(cov, 2), "citations": ans["citations"],
                                "took_ms": round((time.time() - t0) * 1000), "search_ms": search_ms, "llm_first_ms": first_ms}

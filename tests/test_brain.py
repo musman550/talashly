@@ -242,6 +242,16 @@ def test_llm_all_garbage_falls_back_to_extractive(env):
     assert "nonsense" not in r["text"] and "robots.txt" in r["text"] and "[1]" in r["text"]
 
 
+def test_llm_says_sources_dont_cover_it_then_answers_directly_not_extractive_garbage(env):
+    llm = FakeLLM("The sources do not contain this information.", direct="A polite crawler is one that respects the rules of a site.")
+    try:
+        r = run(collect(_llm_env(env, llm.url), "what does a polite crawler do"))
+    finally:
+        llm.close()
+    assert r["done"]["mode"] == "llm-direct"
+    assert "respects the rules" in r["text"] and "do not contain" not in r["text"] and "robots.txt" not in r["text"]
+
+
 def test_llm_crash_mid_stream_recovers_with_extractive_answer(env):
     llm = FakeLLM("A polite crawler obeys robots.txt and waits between requests to the same host [1].", mode="crash")
     try:

@@ -75,6 +75,18 @@ def test_llm_direct_path_for_tasks_with_key_and_history(tmp_path, monkeypatch):
     assert "k-123" not in r.text
 
 
+def test_non_latin_question_goes_straight_to_llm_without_index_or_live_research(tmp_path, monkeypatch):
+    calls = []
+    _fake_llm(monkeypatch, calls)
+    cfg, app = build(tmp_path)
+    cfg["llm"].update(enabled=True, base_url="https://llm.example", api_key="k", model="m1", path="/v1/chat/completions")
+    with TestClient(app) as c:
+        r = c.post("/api/chat", json={"message": "اسلام آباد پاکستان کا دارالحکومت کیوں ہے؟", "private": True, "model": "mus-7.01-polyglot"},
+                   headers={"X-Client-Id": "u" * 24})
+        assert "llm-direct" in r.text and "Sure! " in r.text
+    assert len(calls) == 1
+
+
 def test_llm_failure_falls_back_to_builder(tmp_path, monkeypatch):
     def handler(request):
         return httpx.Response(500)

@@ -130,8 +130,9 @@ class Site:
 class FakeLLM:
     """llama.cpp jaisa OpenAI-compatible server. mode: good | crash | dead(use closed port)."""
 
-    def __init__(self, answer: str, mode: str = "good") -> None:
-        self.answer, self.mode = answer, mode
+    def __init__(self, answer: str, mode: str = "good", direct: str | None = None) -> None:
+        """direct: prompt mein SOURCES na ho to ye jawab (seedha-LLM raaste ki jaanch)."""
+        self.answer, self.mode, self.direct = answer, mode, direct
         outer = self
 
         class H(http.server.BaseHTTPRequestHandler):
@@ -152,12 +153,12 @@ class FakeLLM:
                 self.wfile.flush()
 
             def do_POST(self):
-                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
-                toks = outer.answer.split(" ")
+                toks = (outer.direct if (outer.direct is not None and b"SOURCES:" not in body) else outer.answer).split(" ")
                 if outer.mode == "crash":
                     toks = toks[:2]
                 for t in toks:
