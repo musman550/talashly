@@ -78,3 +78,9 @@ Talashly ke jawab ke liye LLM nodes ek saath: (1) static node (apni 24/7 machine
 Setup (ek baar): VM par `sudo cat ~/talashly/data/mesh_secret.txt` -> GitHub Secret `MESH_SECRET`; phir Actions -> `kaggle-node` -> Run workflow. Uske baad har ghante guard khud node dobara chalata hai (do slugs alternate). Status: `/api/mesh/status`, admin: `/admin/mesh`.
 Note: prompts aap ke apne Kaggle notebook tak jate hain (HTTP, signed). Kaggle ke ToS par server-jaisa use ka risk hai (unverified).
 Tezi: CPU node = Qwen3-1.7B (ya apna trained model Release mein ho to wohi pehle); `kaggle-gpu` (roz ~3.5 ghante, Kaggle GPU, Qwen3-8B) bohat tez; mesh sab se tez zinda node ko pehle istemal karta hai. Deep mode mein "email/poem/code likho" jaise kaam seedha LLM ko jate hain (research nahi).
+
+### Oracle A1 (bari free VM) khud banana
+Actions -> `oracle-a1` har 10 minute mein Always-Free A1 VM banane ki koshish karta hai (pehle 4 core/24 GB, account ki limit kam ho to 2/12, phir 1/6). "Out of host capacity" aam hai: chup-chaap agli baar. Ban jaye to VM khud Docker + Talashly + auto-update + apna Qwen3-4B laga leti hai (`deploy/a1-cloud-init.sh`) aur run ke Summary mein IP likhta hai. Secrets: `OCI_USER OCI_TENANCY OCI_FINGERPRINT OCI_REGION OCI_KEY SSH_PUBKEY MESH_SECRET`. Ban chuki ho to dobara nahi banata.
+
+### GPU node
+`kaggle-gpu` roz ~3.5 ghante: Qwen3-14B (na chale to 8B, phir 4B), Kaggle T4. Mesh sab se tez node ko pehle istemal karta hai; band ho to CPU node, phir VM ka extractive brain.
