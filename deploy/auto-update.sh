@@ -24,7 +24,18 @@ elif [ "$CHANGED" = 1 ]; then
   docker compose up -d --build 2>&1 | tail -5
 fi
 docker image prune -f >/dev/null 2>&1
-if ! curl -fsS --max-time 15 http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
-  echo "$(date -u +%FT%TZ) health fail: restart"
-  docker compose up -d 2>&1 | tail -3
+# health: ek akeli fail par restart NAHI (VM chhota hai, kabhi 20-40 s atakta hai; restart se aur bura hota tha).
+# 3 lagatar fail (~15 min) aur container 5 min se purana ho to hi restart.
+ST="$DIR/data/.health_fails"; mkdir -p "$DIR/data" 2>/dev/null
+if curl -fsS --max-time 60 http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
+  echo 0 > "$ST" 2>/dev/null
+else
+  N=$(( $(cat "$ST" 2>/dev/null || echo 0) + 1 )); echo "$N" > "$ST" 2>/dev/null
+  UP=$(docker inspect -f '{{.State.StartedAt}}' "$(docker compose ps -q search 2>/dev/null)" 2>/dev/null)
+  AGE=999999; [ -n "$UP" ] && AGE=$(( $(date +%s) - $(date -d "$UP" +%s 2>/dev/null || echo 0) ))
+  echo "$(date -u +%FT%TZ) health fail #$N (container ${AGE}s purana)"
+  if [ "$N" -ge 3 ] && [ "$AGE" -gt 300 ]; then
+    echo "$(date -u +%FT%TZ) health fail x$N: restart"; echo 0 > "$ST" 2>/dev/null
+    docker compose up -d --force-recreate search 2>&1 | tail -3
+  fi
 fi

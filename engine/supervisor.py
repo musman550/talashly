@@ -117,16 +117,20 @@ class Supervisor:
                         self.db.set_stat("heartbeat", time.time())
                         if self._crawler_run and not self._crawler_run.done():
                             self._crawler_run.cancel()  # _crawler_loop khud naya crawler bana lega (dusra loop nahi banta)
-                self.quarantine_bad_domains()
+                rows = await asyncio.to_thread(self._bad_domain_rows)   # bhari GROUP BY: event loop par nahi (6-40 s atkata tha)
+                self.quarantine_bad_domains(rows=rows)
             except Exception as e:  # noqa: BLE001
                 log.warning("watchdog error: %s", e)
 
-    def quarantine_bad_domains(self, hours: float = 6) -> list[str]:
-        """Jo domain lagatar fail ho raha ho usay kuch ghantay ke liye pause karo (baqi sites par asar na pare)."""
-        rows = self.db.q(
+    def _bad_domain_rows(self):
+        return self.db.rq(
             "SELECT domain, SUM(status='error') e, SUM(status='done') d FROM frontier GROUP BY domain "
             "HAVING e>=10 AND e > 3*d AND domain NOT IN (SELECT domain FROM domain_state WHERE paused_until>?)",
             (time.time(),))
+
+    def quarantine_bad_domains(self, hours: float = 6, rows=None) -> list[str]:
+        """Jo domain lagatar fail ho raha ho usay kuch ghantay ke liye pause karo (baqi sites par asar na pare)."""
+        rows = self._bad_domain_rows() if rows is None else rows
         out = []
         for r in rows:
             self.db.pause_domain(r["domain"], hours * 3600)
@@ -142,7 +146,9 @@ class Supervisor:
         db = DB(self.db.path)  # thread-safe: apna connection
         report = []
         try:
-            full_due = force_backup or time.time() - db.get_stat("last_full_check", 0) > 86400 \
+            # bhari kaam (poora integrity scan, 1.4 GB backup) sirf raat ke crawl-window mein: din mein disk/CPU user ke liye
+            night = in_active_hours(self.cfg["crawler"]["active_hours"], self.cfg["crawler"]["timezone_offset_hours"])
+            full_due = force_backup or (night and time.time() - db.get_stat("last_full_check", 0) > 86400) \
                 or not db.integrity_light()
             integ = {"ok": True}
             if full_due:
@@ -159,7 +165,7 @@ class Supervisor:
                 report.append(f"FTS rebuild: {n} chunks")
                 db.log("heal", "; ".join(report))
             last = db.get_stat("last_backup", 0)
-            if force_backup or time.time() - last > 86400:
+            if force_backup or (night and time.time() - last > 86400):
                 p = db.backup(self.cfg["_data_dir"] + "/backups", self.m["backup_keep"])
                 db.set_stat("last_backup", time.time())
                 report.append(f"backup: {p}")
