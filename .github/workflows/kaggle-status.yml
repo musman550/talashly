@@ -1,0 +1,33 @@
+name: kaggle-status
+# Kaggle notebook-nodon ki halat + aakhri logs (sirf dekhne ke liye, manual).
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Status + log tails
+        run: |
+          pip install -q kaggle six
+          mkdir -p ~/.kaggle
+          if [[ "$KAGGLE_KEY" == KGAT_* ]]; then printf '%s' "$KAGGLE_KEY" > ~/.kaggle/access_token; export KAGGLE_API_TOKEN="$KAGGLE_KEY"
+          else printf '{"username":"%s","key":"%s"}' "$KAGGLE_USERNAME" "$KAGGLE_KEY" > ~/.kaggle/kaggle.json; fi
+          chmod 600 ~/.kaggle/* || true
+          for slug in talashly-node-a talashly-node-b talashly-gpu; do
+            echo "=================== $slug"
+            kaggle kernels status "$KAGGLE_USERNAME/$slug" 2>&1 | tail -2
+            rm -rf "out_$slug"; mkdir "out_$slug"
+            kaggle kernels output "$KAGGLE_USERNAME/$slug" -p "out_$slug" >/dev/null 2>&1 || true
+            f=$(ls out_$slug/*.log 2>/dev/null | head -1)
+            if [ -n "$f" ]; then python3 deploy/kaggle_logs.py "$f"; else echo "(log nahi mila)"; fi
+          done
