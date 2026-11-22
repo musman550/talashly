@@ -31,9 +31,10 @@ key_file=$HOME/.oci/key.pem
 CFG
 export OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True
 T="$OCI_TENANCY"
-J() { oci "$@" --output json 2>&1; }
+ERR=/tmp/oci.err; : > "$ERR"
+J() { oci "$@" --output json 2>>"$ERR"; }   # stdout = sirf JSON; warnings/errors alag file mein (JSON kharab na ho)
 
-out=$(J compute instance list --compartment-id "$T" --all) || { echo "::error::OCI login/list fail (key/fingerprint/region check karo): $out" | head -c 600; exit 1; }
+out=$(J compute instance list --compartment-id "$T" --all) || { echo "::error::OCI login/list fail (key/fingerprint/region check karo): $(tail -c 500 "$ERR") $(echo "$out" | head -c 300)"; exit 1; }
 if echo "$out" | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',[]); sys.exit(0 if any(i['shape']=='VM.Standard.A1.Flex' and i['lifecycle-state'] not in ('TERMINATED','TERMINATING') for i in d) else 1)"; then
   echo "A1 VM pehle se maujood hai - kuch nahi karna"; exit 0
 fi
@@ -44,10 +45,18 @@ d=json.load(sys.stdin).get('data',[])
 d=[s for s in d if not s.get('prohibit-public-ip-on-vnic') and s['lifecycle-state']=='AVAILABLE']
 print(d[0]['id'] if d else '')")
 [ -n "$subnet" ] || { echo "::error::public subnet nahi mili (VCN banao ya pehli VM wali subnet chahiye)"; exit 1; }
-image=$(J compute image list --compartment-id "$T" --operating-system "Canonical Ubuntu" --operating-system-version "22.04" \
-  --shape VM.Standard.A1.Flex --sort-by TIMECREATED --sort-order DESC --limit 1 | python3 -c "
-import sys,json; d=json.load(sys.stdin).get('data',[]); print(d[0]['id'] if d else '')")
-[ -n "$image" ] || { echo "::error::Ubuntu 22.04 ARM image nahi mili"; exit 1; }
+image=""
+for ver in 22.04 24.04 ""; do
+  if [ -n "$ver" ]; then vf=(--operating-system-version "$ver"); else vf=(); fi
+  image=$(J compute image list --compartment-id "$T" --operating-system "Canonical Ubuntu" "${vf[@]}" \
+    --shape VM.Standard.A1.Flex --sort-by TIMECREATED --sort-order DESC --limit 1 | python3 -c "
+import sys,json
+t=sys.stdin.read().strip()
+d=json.loads(t).get('data',[]) if t else []
+print(d[0]['id'] if d else '')" 2>/dev/null)
+  [ -n "$image" ] && { echo "image: Ubuntu ${ver:-latest}"; break; }
+done
+[ -n "$image" ] || { echo "::error::Ubuntu ARM image nahi mili: $(tail -c 400 "$ERR")"; exit 1; }
 
 printf '%s\n' "$SSH_PUBKEY" > /tmp/key.pub
 sed "s|__MESH_SECRET__|$MESH_SECRET|" deploy/a1-cloud-init.sh > /tmp/init.sh
@@ -57,9 +66,9 @@ for ad in $(J iam availability-domain list --compartment-id "$T" | python3 -c "i
   res=$(oci compute instance launch --availability-domain "$ad" --compartment-id "$T" --shape VM.Standard.A1.Flex \
     --shape-config '{"ocpus":4,"memoryInGBs":24}' --subnet-id "$subnet" --image-id "$image" --assign-public-ip true \
     --boot-volume-size-in-gbs 100 --ssh-authorized-keys-file /tmp/key.pub --user-data-file /tmp/init.sh \
-    --display-name talashly-a1 --output json 2>&1)
+    --display-name talashly-a1 --output json 2>"$ERR"); res="$res $(tail -c 800 "$ERR")"
   if echo "$res" | grep -q '"lifecycle-state"'; then
-    id=$(echo "$res" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])")
+    id=$(echo "$res" | grep -o 'ocid1\.instance\.[A-Za-z0-9._-]*' | head -1)
     echo "A1 VM BAN GAYI: $id"
     sleep ${A1_WAIT:-90}
     ip=$(J compute instance list-vnics --instance-id "$id" | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',[]); print(d[0].get('public-ip','') if d else '')")
