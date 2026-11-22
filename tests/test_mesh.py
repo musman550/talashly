@@ -464,12 +464,12 @@ def test_slow_search_does_not_block_the_server(tmp_path, monkeypatch):
     assert max(lat) < 0.6, lat
 
 
-def _relay_site(tmp_path, mode):
+def _relay_site(tmp_path, mode, tier=1):
     cfg, app = build_site(tmp_path)
     async def run(qs, model):
         async with app.router.lifespan_context(app):
             M.MESH.secret = "s" * 32
-            w = RelayWorker("http://site.test", "s" * 32, "http://llm.test", slots=1, flush_s=0.0, log=lambda *a: None)
+            w = RelayWorker("http://site.test", "s" * 32, "http://llm.test", slots=1, flush_s=0.0, log=lambda *a: None, tier=tier)
             w._tr = Router(app, make_fake_llama(mode))
             c = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://site.test")
             task = asyncio.create_task(w.run())
@@ -485,12 +485,25 @@ def _relay_site(tmp_path, mode):
 
 
 def test_every_model_sends_tasks_to_llm_and_phrasing_variants_are_tasks(tmp_path):
+    # GPU-tier node: website bhi LLM se (tez hai). Phrasing ke sab variants "task" maane jate hain.
     qs = ["ok, but you need to create simple professional website there showing premiume clothes and shose with prices html",
           "need html website", "banao ik email landlord ke liye", "can you write a poem about rain"]
-    run = _relay_site(tmp_path, {})
+    run = _relay_site(tmp_path, {}, tier=3)
     for model in ("mus-7.01-flash", "mus-7.01", "mus-7.01-deep", "mus-7.01-code"):
         for (text, m), q in zip(asyncio.run(run(qs, model)), qs):
             assert m == "llm-direct" and text.startswith("NODE says:"), (model, q, m, text[:80])
+
+
+def test_cpu_only_node_gets_email_poem_but_website_uses_instant_builder(tmp_path):
+    # CPU node ~10 tok/s: website LLM se 60-90 s; builder < 1 s. Baqi tasks (email/poem) phir bhi LLM se.
+    run = _relay_site(tmp_path, {}, tier=1)
+    qs = ["need html website", "create a website for my bakery", "banao ik email landlord ke liye", "can you write a poem about rain"]
+    for model in ("mus-7.01-flash", "mus-7.01-deep", "mus-7.01-code"):
+        got = asyncio.run(run(qs, model))
+        for (text, m), q in zip(got[:2], qs[:2]):
+            assert m == "builder" and "<html" in text.lower(), (model, q, m, text[:60])
+        for (text, m), q in zip(got[2:], qs[2:]):
+            assert m == "llm-direct" and text.startswith("NODE says:"), (model, q, m, text[:60])
 
 
 def test_site_request_falls_back_to_builder_when_llm_dies_midway(tmp_path):

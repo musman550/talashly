@@ -323,6 +323,11 @@ class Mesh:
 MESH = Mesh()
 
 
+def fast_llm_available() -> bool:
+    """GPU-tier relay-node zinda hai? (CPU node par lambi cheezein 10 tok/s: poori website 60-90 s)."""
+    return any(n.tier >= 3 for n in MESH.alive_relays())
+
+
 def llm_available(cfg: dict) -> bool:
     """Kam az kam ek LLM zinda hone ki umeed: static enabled ya koi relay-node abhi pull kar raha hai."""
     return bool(cfg.get("enabled")) or MESH.has_alive()

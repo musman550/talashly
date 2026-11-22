@@ -233,13 +233,14 @@ def test_llm_hallucination_is_removed_and_user_sees_only_grounded_text(env):
     assert any(x["kind"] == "verify" for x in map(dict, env[1].q("SELECT kind FROM brain_log")))
 
 
-def test_llm_all_garbage_falls_back_to_extractive(env):
-    llm = FakeLLM("Totally unrelated nonsense without any citation at all")
+def test_llm_uncited_answer_gets_direct_llm_answer_not_wrong_extractive(env):
+    """LLM ne sources se bahar (bina citation) likha: sources sawal se mel na khate hon to extractive ghalat hota hai (France -> Ivory Coast)."""
+    llm = FakeLLM("Totally unrelated nonsense without any citation at all", direct="A polite crawler respects robots.txt and rate limits.")
     try:
         r = run(collect(_llm_env(env, llm.url), "what does a polite crawler do"))
     finally:
         llm.close()
-    assert "nonsense" not in r["text"] and "robots.txt" in r["text"] and "[1]" in r["text"]
+    assert "nonsense" not in r["text"] and r["done"]["mode"] == "llm-direct" and "respects robots.txt" in r["text"]
 
 
 def test_llm_says_sources_dont_cover_it_then_answers_directly_not_extractive_garbage(env):

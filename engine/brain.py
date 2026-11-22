@@ -64,9 +64,6 @@ def _join_list(parts: list[str]) -> str:
     return ", ".join(parts)
 
 
-NOT_IN_SOURCES = re.compile(r"nahi\s+mila|not\s+(?:found|mentioned|provided|available|covered)|(?:do|does|did)(?:\s+not|n't)\s+(?:contain|mention|provide|include|say)|no\s+(?:relevant\s+)?information|cannot\s+(?:find|answer)", re.I)
-
-
 class Brain:
     def __init__(self, cfg: dict, db: DB, searcher: Searcher, sources: list[dict] | None = None):
         self.cfg, self.db, self.searcher = cfg, db, searcher
@@ -397,9 +394,9 @@ class Brain:
                 clean, dropped = ground_check(text, hits)
                 if dropped or not clean:
                     self.db.log("verify", f"llm answer corrected, dropped={dropped}, head={text[:160]!r}")
-                    if not clean and NOT_IN_SOURCES.search(text):
-                        # sources sawal se mel hi nahi khate (jaise France ke sawal par Ivory Coast): extractive kachra dikhane ke bajaye
-                        # LLM apne ilm se seedha jawab de (bina sources; chhota, tez)
+                    if not clean:
+                        # LLM ke jawab ka koi hissa sources se verify nahi hua (aksar: sources sawal se mel hi nahi khate, jaise France ke sawal
+                        # par Ivory Coast, aur LLM ne seedha "Paris" likha). Extractive kachra dikhane ke bajaye LLM se seedha jawab (bina sources)
                         yield "replace", ""
                         direct: list[str] = []
                         try:

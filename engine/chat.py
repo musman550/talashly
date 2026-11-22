@@ -18,7 +18,7 @@ from .lang import reply_lang, tr
 from .models import Model, get_model
 from .builder import build_site, wants_site
 from .llm import stream_chat
-from .mesh import llm_available
+from .mesh import fast_llm_available, llm_available
 from .skills import compare, poem
 from .policy import CREATIVE, intent, is_unclear, policy_check, strip_cites, wants_sources
 from .search import Searcher, coverage, detect_script, terms
@@ -182,6 +182,11 @@ def contextualize(q: str, prev_user: str | None) -> str:
         return q
     prev = re.sub(r"\s+", " ", prev_user).strip()[:200]
     return f"{prev} {q}"[:500]
+
+
+def _has_page(history: list[dict] | None) -> bool:
+    return any(h.get("role") == "assistant" and re.search(r"<html|```html|<!doctype", str(h.get("content", "")), re.I)
+               for h in (history or [])[-6:])
 
 
 def format_with_sources(text: str, sources: list[dict]) -> str:
@@ -507,6 +512,12 @@ class Chat:
         ready = llm_available(llm)
         site = wants_site(text)
         if site and not ready:
+            yield "token", build_site(text)
+            yield "done", {"mode": "builder"}
+            return
+        if site and ready and not fast_llm_available() and not _has_page(history):
+            # sirf CPU node: poori website LLM se 60-90 s (10 tok/s); template builder < 1 s mein poora page deta hai.
+            # LLM tab jab GPU node zinda ho, ya user pichle page ko edit/upgrade kare (history mein html)
             yield "token", build_site(text)
             yield "done", {"mode": "builder"}
             return
