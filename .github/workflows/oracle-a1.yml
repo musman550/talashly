@@ -2,7 +2,7 @@ name: oracle-a1
 # Oracle Always-Free A1 (4 core / 24 GB) khud banata hai jab capacity mile. Secrets: OCI_USER OCI_TENANCY OCI_FINGERPRINT OCI_REGION OCI_KEY SSH_PUBKEY MESH_SECRET
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "7 * * * *"   # GitHub cron kam chalta hai, isliye har run andar se ~55 minute har minute koshish karta hai
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,7 +12,7 @@ concurrency:
 jobs:
   try:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 58
     env:
       OCI_USER: ${{ secrets.OCI_USER }}
       OCI_TENANCY: ${{ secrets.OCI_TENANCY }}
@@ -34,4 +34,10 @@ jobs:
       - if: steps.s.outputs.go == '1'
         run: pip install -q oci-cli
       - if: steps.s.outputs.go == '1'
-        run: bash deploy/oci-a1.sh
+        run: |
+          rm -f /tmp/a1_done
+          for i in $(seq 1 50); do
+            bash deploy/oci-a1.sh || exit 1
+            [ -f /tmp/a1_done ] && exit 0
+            sleep 60
+          done

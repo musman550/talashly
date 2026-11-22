@@ -1,0 +1,17 @@
+name: speedtest
+# Live site par asli chat-test (Flash/Standard/Deep/Code/Polyglot): pehla token, total waqt, atkna. Sirf manual.
+on:
+  workflow_dispatch:
+    inputs:
+      site:
+        description: "Site URL"
+        default: "http://137.23.39.13:8000"
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 deploy/speedtest.py "${{ github.event.inputs.site || 'http://137.23.39.13:8000' }}"

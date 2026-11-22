@@ -36,7 +36,7 @@ J() { oci "$@" --output json 2>>"$ERR"; }   # stdout = sirf JSON; warnings/error
 
 out=$(J compute instance list --compartment-id "$T" --all) || { echo "::error::OCI login/list fail (key/fingerprint/region check karo): $(tail -c 500 "$ERR") $(echo "$out" | head -c 300)"; exit 1; }
 if echo "$out" | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',[]); sys.exit(0 if any(i['shape']=='VM.Standard.A1.Flex' and i['lifecycle-state'] not in ('TERMINATED','TERMINATING') for i in d) else 1)"; then
-  echo "A1 VM pehle se maujood hai - kuch nahi karna"; exit 0
+  echo "A1 VM pehle se maujood hai - kuch nahi karna"; touch /tmp/a1_done; exit 0
 fi
 
 subnet=$(J network subnet list --compartment-id "$T" --all | python3 -c "
@@ -79,7 +79,7 @@ for ad in $ADS; do
     ip=$(J compute instance list-vnics --instance-id "$id" | python3 -c "import sys,json; d=json.load(sys.stdin).get('data',[]); print(d[0].get('public-ip','') if d else '')")
     { echo "### Oracle A1 VM ban gayi"; echo "Public IP: **$ip** (setup 5-10 min mein khud poora hoga; phir http://$ip:8000)"; } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
     echo "::notice::A1 ready: http://$ip:8000 (5-10 min baad)"
-    exit 0
+    touch /tmp/a1_done; exit 0
   fi
   if echo "$res" | grep -qiE "out of (host )?capacity|OutOfHostCapacity|TooManyRequests|InternalError"; then
     echo "  capacity nahi: $(echo "$res" | grep -oiE 'out of[^"]*capacity[^"]*|LimitExceeded|TooManyRequests' | head -1)"; continue
