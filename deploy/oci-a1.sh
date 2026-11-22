@@ -79,7 +79,7 @@ for ad in $(J iam availability-domain list --compartment-id "$T" | python3 -c "i
   if echo "$res" | grep -qiE "out of (host )?capacity|OutOfHostCapacity|LimitExceeded|TooManyRequests|InternalError"; then
     echo "  capacity nahi: $(echo "$res" | grep -oiE 'out of[^"]*capacity[^"]*|LimitExceeded|TooManyRequests' | head -1)"; continue
   fi
-  echo "::error::launch fail: $(echo "$res" | tail -c 500)"; exit 1
+  echo "::error::launch fail: $(echo "$res" | tr '\n' ' ' | grep -oE '"(code|message)": "[^"]*"' | head -4 | tr '\n' ' ') || $(echo "$res" | tr '\n' ' ' | tr -s ' ' | head -c 700)"; exit 1
 done
 echo "abhi capacity nahi - 10 minute baad dobara"
 exit 0
