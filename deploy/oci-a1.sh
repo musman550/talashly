@@ -66,7 +66,7 @@ for ad in $(J iam availability-domain list --compartment-id "$T" | python3 -c "i
   res=$(oci compute instance launch --availability-domain "$ad" --compartment-id "$T" --shape VM.Standard.A1.Flex \
     --shape-config '{"ocpus":4,"memoryInGBs":24}' --subnet-id "$subnet" --image-id "$image" --assign-public-ip true \
     --boot-volume-size-in-gbs 100 --ssh-authorized-keys-file /tmp/key.pub --user-data-file /tmp/init.sh \
-    --display-name talashly-a1 --output json 2>"$ERR"); res="$res $(tail -c 800 "$ERR")"
+    --display-name talashly-a1 --output json 2>"$ERR"); res="$res $(head -c 3000 "$ERR")"
   if echo "$res" | grep -q '"lifecycle-state"'; then
     id=$(echo "$res" | grep -o 'ocid1\.instance\.[A-Za-z0-9._-]*' | head -1)
     echo "A1 VM BAN GAYI: $id"
