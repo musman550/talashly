@@ -3,8 +3,8 @@ services:
     image: ghcr.io/musman550/talashly:latest   # GitHub Actions banata hai; na mile to VM par build ho jata hai
     build: .
     restart: unless-stopped
-    mem_limit: 700m          # 1 GB VM par OS ke liye jagah bachaye (swap alag)
-    memswap_limit: 1500m
+    mem_limit: ${SEARCH_MEM:-700m}          # 1 GB VM par OS ke liye jagah bachaye (swap alag); bari VM par .env mein SEARCH_MEM=4g
+    memswap_limit: ${SEARCH_MEMSWAP:-1500m}
     init: true
     ports: ["8000:8000"]
     env_file:
@@ -44,9 +44,9 @@ services:
     profiles: ["llm"]
     image: ghcr.io/ggml-org/llama.cpp:server
     restart: unless-stopped
-    command: ["-hf", "unsloth/Qwen3-1.7B-GGUF:Q4_K_M", "--host", "0.0.0.0", "--port", "8081", "-c", "4096", "-t", "2", "--parallel", "2"]
+    command: ["-hf", "${LLM_HF:-unsloth/Qwen3-1.7B-GGUF:Q4_K_M}", "--host", "0.0.0.0", "--port", "8081", "-c", "${LLM_CTX:-4096}", "-t", "${LLM_THREADS:-2}", "--parallel", "2"]
     environment:
       - LLAMA_CACHE=/models
     volumes:
       - ./data/models:/models      # model ek dafa download hota hai (~1.1 GB), phir yahin rehta hai
-    mem_limit: 3g
+    mem_limit: ${LLM_MEM:-3g}

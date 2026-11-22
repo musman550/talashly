@@ -37,6 +37,13 @@ if [ ! -f .env ] || [ -n "$PUBLIC_URL" ]; then   # purani settings na mitayen
   { echo "SS_SITE_URL=${PUBLIC_URL}"; echo "SS_TRUST_PROXY=0"; } > .env
 fi
 
+# Environment se aaye settings (cloud-init / A1 VM): purani .env mitaye baghair jod do
+setenv() { grep -q "^$1=" .env 2>/dev/null && sed -i "s|^$1=.*|$1=$2|" .env || echo "$1=$2" >> .env; }
+[ -n "${MESH_SECRET:-}" ] && setenv MESH_SECRET "$MESH_SECRET"
+if [ "$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)" -ge 6000 ]; then   # bari VM (A1): search ko khul kar RAM
+  setenv SEARCH_MEM 4g; setenv SEARCH_MEMSWAP 4g
+fi
+
 echo "[4/5] Firewall (Ubuntu iptables, port 8000)..."
 if ! sudo iptables -C INPUT -p tcp --dport 8000 -j ACCEPT 2>/dev/null; then
   sudo iptables -I INPUT 1 -p tcp --dport 8000 -j ACCEPT

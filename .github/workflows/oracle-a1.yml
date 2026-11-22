@@ -1,0 +1,37 @@
+name: oracle-a1
+# Oracle Always-Free A1 (4 core / 24 GB) khud banata hai jab capacity mile. Secrets: OCI_USER OCI_TENANCY OCI_FINGERPRINT OCI_REGION OCI_KEY SSH_PUBKEY MESH_SECRET
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: oracle-a1
+  cancel-in-progress: false
+jobs:
+  try:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      OCI_USER: ${{ secrets.OCI_USER }}
+      OCI_TENANCY: ${{ secrets.OCI_TENANCY }}
+      OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+      OCI_REGION: ${{ secrets.OCI_REGION }}
+      OCI_KEY: ${{ secrets.OCI_KEY }}
+      SSH_PUBKEY: ${{ secrets.SSH_PUBKEY }}
+      MESH_SECRET: ${{ secrets.MESH_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: secrets hain?
+        id: s
+        run: |
+          [ -n "$OCI_KEY" ] && [ -n "$OCI_USER" ] && echo "go=1" >> "$GITHUB_OUTPUT" || echo "::notice::OCI secrets abhi nahi hain - skip"
+      - if: steps.s.outputs.go == '1'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - if: steps.s.outputs.go == '1'
+        run: pip install -q oci-cli
+      - if: steps.s.outputs.go == '1'
+        run: bash deploy/oci-a1.sh
