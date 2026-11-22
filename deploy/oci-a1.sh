@@ -76,8 +76,11 @@ for ad in $(J iam availability-domain list --compartment-id "$T" | python3 -c "i
     echo "::notice::A1 ready: http://$ip:8000 (5-10 min baad)"
     exit 0
   fi
-  if echo "$res" | grep -qiE "out of (host )?capacity|OutOfHostCapacity|LimitExceeded|TooManyRequests|InternalError"; then
+  if echo "$res" | grep -qiE "out of (host )?capacity|OutOfHostCapacity|TooManyRequests|InternalError"; then
     echo "  capacity nahi: $(echo "$res" | grep -oiE 'out of[^"]*capacity[^"]*|LimitExceeded|TooManyRequests' | head -1)"; continue
+  fi
+  if echo "$res" | grep -q "LimitExceeded"; then
+    echo "::error::Oracle limit: $(echo "$res" | tr '\n' ' ' | tr -s ' ' | grep -oE '"message": *"[^"]*"' | head -2)"; exit 1
   fi
   echo "::error::launch fail: $(echo "$res" | tr '\n' ' ' | grep -oE '"(code|message)": *"[^"]*"' | head -4 | tr '\n' ' ') || $(echo "$res" | tr '\n' ' ' | tr -s ' ' | head -c 1400)"; exit 1
 done
