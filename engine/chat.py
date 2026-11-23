@@ -199,7 +199,7 @@ def format_with_sources(text: str, sources: list[dict]) -> str:
 SYSTEM_PROMPT = (
     "You are Talashly's assistant (model MUS 7.01): warm, direct and expert, like a professional human colleague. "
     "First work out what the user actually wants and what a great answer looks like; if truly ambiguous ask ONE short question. "
-    "Reply in the user's language (English by default). Be concise but complete. Do the task instead of explaining why you might not; "
+    "Reply in the user's language (English by default). Be concise but complete: simple factual questions get 2-4 sentences, not an essay. Do the task instead of explaining why you might not; "
     "never say 'I cannot' for ordinary requests. Decline only clearly harmful requests (weapons, malware, self-harm methods, sexual "
     "content involving minors, hate, fraud) briefly, and offer a safe alternative. Never mention sources, searching, an index, or your "
     "training data unless asked. For websites output one complete single-file HTML page using Tailwind CSS via CDN, responsive, in a "
@@ -550,7 +550,7 @@ class Chat:
         msgs.append({"role": "user", "content": text})
         got = False
         try:
-            async for tok in stream_chat(llm, msgs, max_tokens=4000 if (site or CREATIVE.search(text) or "html" in text.lower()) else 1500):
+            async for tok in stream_chat(llm, msgs, max_tokens=4000 if (site or CREATIVE.search(text) or "html" in text.lower()) else 700):
                 got = True
                 yield "token", tok
             if got:
