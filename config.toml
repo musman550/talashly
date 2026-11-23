@@ -40,7 +40,7 @@ host = "127.0.0.1"              # sirf is PC se. Doosre devices ke liye "0.0.0.0
 port = 8000
 require_key = false             # true: har user ko API key chahiye (ADD_USER.bat)
 workers = 2                     # background tasks (lambi research) ke liye
-rate_per_min = 60               # bina key wale (anonymous) users ki limit
+rate_per_min = 600              # bina key wale (anonymous) users ki limit
 
 [brain]
 live_research = true            # index mein jawab kamzor ho to sawal ke dauran live sources se lao

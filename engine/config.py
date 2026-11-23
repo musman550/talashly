@@ -19,7 +19,7 @@ DEFAULTS: dict[str, Any] = {
     "recrawl": {"news_minutes": 30, "default_hours": 24, "max_hours": 168},
     "search": {"default_limit": 8, "recency_half_life_days": 30},
     "llm": {"enabled": False, "base_url": "http://127.0.0.1:8081", "api_key": "", "model": "", "path": "/v1/chat/completions"},
-    "server": {"host": "127.0.0.1", "port": 8000, "require_key": False, "workers": 2, "rate_per_min": 60,
+    "server": {"host": "127.0.0.1", "port": 8000, "require_key": False, "workers": 2, "rate_per_min": 600,
                "cors": True},
     "site": {"name": "Talashly", "url": "http://127.0.0.1:8000"},
     # chat: max_concurrent = ek waqt mein kitne jawab ban sakte hain; queue_max = intezar mein kitne; 0 quota = unlimited
