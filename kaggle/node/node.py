@@ -16,6 +16,9 @@ SECRET = "__SECRET__"
 OWN_MODEL = "__MODEL_URL__"          # Talashly ka apna trained model (Release), khali ho sakta hai
 HOURS = float("__HOURS__")
 NAME = "__SLUG__"
+KUSER = "__KUSER__"                  # khud-tajdeed ke liye (node ~10.5 h baad khatam; naya node GitHub cron ke baghair khud chalao)
+KKEY = "__KKEY__"
+OTHER = {"talashly-node-a": "talashly-node-b", "talashly-node-b": "talashly-node-a"}   # GPU node tajdeed nahi karta (quota)
 W = "/tmp/talashly"   # /kaggle/working nahi: wahan ki files Output ban kar 1-10 GB download hoti hain (status/log dekhna sust)
 T0 = time.time()
 HF = "https://huggingface.co/unsloth"
@@ -168,12 +171,77 @@ async def serve(proc, kind):
     wd.cancel()
 
 
+def render_successor(src: str, own: str, user: str):
+    """Apni source se doosre slot ka notebook banao (sirf NAME badalta hai). (source, metadata_json, other) ya None."""
+    other = OTHER.get(own)
+    if not other:
+        return None
+    src2, n = re.subn(r'^NAME = ".*"$', f'NAME = "{other}"', src, count=1, flags=re.M)
+    if n != 1:
+        return None
+    meta = {"id": f"{user}/{other}", "title": other, "code_file": "node.py", "language": "python", "kernel_type": "script",
+            "is_private": "true", "enable_gpu": "false", "enable_internet": "true",
+            "dataset_sources": [], "competition_sources": [], "kernel_sources": []}
+    return src2, json.dumps(meta), other
+
+
+def renew_once():
+    if not KKEY or KKEY.startswith("__") or not KUSER or KUSER.startswith("__") or NAME not in OTHER:
+        log("tajdeed band (Kaggle credentials ya slot nahi)")
+        return
+    plan = render_successor(open(__file__, encoding="utf8").read(), NAME, KUSER)
+    if not plan:
+        log("tajdeed: apni source se naya notebook nahi ban saka")
+        return
+    src2, meta, other = plan
+    sh("pip install -q kaggle six")
+    os.makedirs(os.path.expanduser("~/.kaggle"), exist_ok=True)
+    env = dict(os.environ)
+    if KKEY.startswith("KGAT_"):
+        env["KAGGLE_API_TOKEN"] = KKEY
+        open(os.path.expanduser("~/.kaggle/access_token"), "w").write(KKEY)
+    else:
+        open(os.path.expanduser("~/.kaggle/kaggle.json"), "w").write(json.dumps({"username": KUSER, "key": KKEY}))
+    for f in ("access_token", "kaggle.json"):
+        try:
+            os.chmod(os.path.expanduser("~/.kaggle/" + f), 0o600)
+        except OSError:
+            pass
+    st = subprocess.run(f"kaggle kernels status {KUSER}/{other}", shell=True, capture_output=True, text=True, env=env)
+    log("tajdeed: doosre slot ki halat:", (st.stdout + st.stderr).strip()[-120:])
+    if re.search(r"running|queued", st.stdout + st.stderr, re.I):
+        log("doosra slot pehle se chal raha hai - tajdeed ki zarurat nahi")
+        return
+    d = f"{W}/renew"
+    os.makedirs(d, exist_ok=True)
+    open(f"{d}/node.py", "w", encoding="utf8").write(src2)
+    open(f"{d}/kernel-metadata.json", "w").write(meta)
+    for i in range(1, 4):
+        r = subprocess.run(f"kaggle kernels push -p {d}", shell=True, capture_output=True, text=True, env=env)
+        log(f"tajdeed push {i}: rc={r.returncode}", (r.stdout + r.stderr).strip()[-160:])
+        if r.returncode == 0:
+            return
+        time.sleep(30)
+    log("tajdeed push nahi hua (GitHub guard ghante mein dekhega)")
+
+
+def renew_thread():
+    time.sleep(max(0.0, HOURS * 3600 - 45 * 60 - (time.time() - T0)))   # khatam hone se 45 min pehle, overlap ke saath
+    try:
+        renew_once()
+    except Exception as e:  # noqa: BLE001
+        log("tajdeed fail:", type(e).__name__, str(e)[:200])
+
+
 def main():
     os.makedirs(W, exist_ok=True)
     sh("pip install -q httpx")
     sh(f"git clone --depth 1 https://github.com/musman550/talashly {W}/repo")
     sys.path.insert(0, f"{W}/repo")
     proc, kind = bring_up()
+    if kind == "cpu":
+        import threading
+        threading.Thread(target=renew_thread, daemon=True).start()
     try:
         asyncio.run(serve(proc, kind))
     finally:
