@@ -69,7 +69,8 @@ class RelayWorker:
         buf, last, cancelled = "", time.time(), False
         t0, first, nchar = time.time(), None, 0
         payload = {"messages": job["messages"], "stream": True, "temperature": job.get("temperature", 0.5),
-                   "max_tokens": min(int(job.get("max_tokens", 1500)), 6000)}
+                   "max_tokens": min(int(job.get("max_tokens", 1500)), 6000),
+                   "repeat_penalty": 1.15, "repeat_last_n": 128}   # chhota model Urdu mein jumle dohrata tha (load test mein dikha)
         if self.model:
             payload["model"] = self.model
         headers = {"Authorization": "Bearer " + self.llm_key} if self.llm_key else {}
