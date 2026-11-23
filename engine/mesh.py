@@ -229,6 +229,9 @@ class Mesh:
         self._wake.set()
         t0 = time.time()
         got = False
+        # lamba prompt (page edit) ka prefill CPU par ~50 tok/s: timeout prompt ke size se badhta hai (30..150 s)
+        est_tok = sum(len(str(m.get("content", ""))) for m in messages) / 3.5
+        first_s = min(150.0, max(FIRST_TOKEN_S, 10.0 + est_tok / 50.0))
         try:
             try:
                 await asyncio.wait_for(job.taken.wait(), PICKUP_TIMEOUT_S)
@@ -237,7 +240,7 @@ class Mesh:
                 raise NodeError("not picked up") from None
             while True:
                 try:
-                    kind, val = await asyncio.wait_for(job.q.get(), CHUNK_TIMEOUT_S if got else FIRST_TOKEN_S)
+                    kind, val = await asyncio.wait_for(job.q.get(), CHUNK_TIMEOUT_S if got else first_s)
                 except asyncio.TimeoutError:
                     raise NodeError("node stalled") from None
                 if kind == "tok":

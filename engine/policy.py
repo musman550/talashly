@@ -48,6 +48,23 @@ def policy_check(text: str) -> str | None:
     return None
 
 
+VAGUE = re.compile(r"^\s*(tell me|tell|say something|say|speak|talk|batao|bolo|kuch batao|kuch bolo|something|anything|ok tell me|ok)"
+                   r"(\s+(something|anything|more|please|pls|kuch|plz))?\s*[.!?]*\s*$", re.I)
+EDIT = re.compile(r"\b(edit|upgrade|improve|update|modify|change|add|remove|fix|redesign|make it|isko|iska|isme|ismein)\b", re.I)
+SHORT_Q = re.compile(r"^\s*(who|what|when|where|which|how many|how much|how old|how long|how far|why|define|capital of|full form)\b", re.I)
+LIVE_Q = re.compile(r"\b(latest|news|today|tonight|current|currently|now|price|weather|score|live|trending|stock|rate|release[ds]?|2026|2025)\b", re.I)
+EXPLAIN = re.compile(r"\b(how (to|do|can|does)|steps?|guide|tutorial|difference|compare|vs|list|explain|ways|tips|roadmap|architecture)\b", re.I)
+
+
+def is_vague(text: str) -> bool:
+    return bool(VAGUE.match(text))
+
+
+def short_fact(text: str) -> bool:
+    """Chhota seedha sawal (<=10 alfaaz), live data nahi: LLM seedha jawab de, index ki talash bekaar."""
+    return len(text.split()) <= 10 and bool(SHORT_Q.match(text)) and not LIVE_Q.search(text)
+
+
 def is_unclear(text: str) -> bool:
     s = re.sub(r"\s+", "", text)
     if not re.search(r"\w", s):

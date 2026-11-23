@@ -20,7 +20,7 @@ from .builder import build_site, wants_site
 from .llm import stream_chat
 from .mesh import fast_llm_available, llm_available
 from .skills import compare, poem
-from .policy import CREATIVE, intent, is_unclear, policy_check, strip_cites, wants_sources
+from .policy import CREATIVE, EDIT, EXPLAIN, intent, is_unclear, is_vague, short_fact, policy_check, strip_cites, wants_sources
 from .search import Searcher, coverage, detect_script, terms
 
 _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -44,6 +44,10 @@ PATTERNS: dict[str, re.Pattern] = {
                       r"aap ka naam kya hai|tumhara naam kya hai|your name|what is your name|what'?s your name|"
                       r"which model are you|what model are you|kya aap insan hain|kya tum insan ho|"
                       r"آپ کون ہیں|تم کون ہو|آپ کا نام کیا ہے|आप कौन हैं|तुम कौन हो)$"),
+    "why": re.compile(r"^(why|should i|why should i|why do i need to|kyun|kyu|kiun) ?(should i |do i need to |i )?(use|choose|pick|try|prefer) (you|talashly|this|mus|tum|aap)( over \w+)?$|^(what makes you (special|different|better)|how are you different( from \w+)?|tum kyun|tumhari khasiyat|aap ki khasiyat)$"),
+    "limits": re.compile(r"^(what are your|what'?s your|tell me your|your) (limits?|limitations?|weaknesses|restrictions|rules|policy|policies)$|^(what (can'?t|cannot|can not) you do|what are you not able to do|what do you not do|tum kya nahi kar sakte|aap kya nahi kar sakte)$"),
+    "privacy": re.compile(r"^(do you|does talashly|will you|are you) (store|save|keep|log|record|read|storing|saving) (my |our |the )?(chats?|messages?|conversations?|data)( \w+)?$|^(is my (chat|data|conversation) (safe|private|stored|saved))$|^(kya (aap|tum) (meri|mere) (chat|baatein|data) (save|store) karte (ho|hain))$"),
+    "free": re.compile(r"^(is (this|talashly|it) free|are you free|is talashly free to use|kya (ye|yeh|talashly) free hai|how much (does it|do you) cost|what is the price of talashly)$"),
     "sad": re.compile(r"^(i am|i'?m|im|main|mai|mein)? ?(feeling )?(very |bohat |bahut )?(sad|upset|lonely|tired|stressed|depressed|udaas|udas|pareshan|thak gaya|thaka hua|tanha|اداس|پریشان|उदास|परेशान)( hun| hoon| hu| hai| ho gaya| feel kar raha hun)?( aaj| today)?$"),
     "joke": re.compile(r"^(please |pls )?(tell|say|crack|give) (me )?(a |one )?(joke|funny)( please)?$|^(joke|koi joke|latifa|لطیفہ)( sunao| suna do| batao)?$"),
     "meta": re.compile(r"^(where|how) (does|do|did) (your|the) (data|knowledge|information|answers?) (come|comes|came|get|gets|got)( from)?$|^(tum|aap) (data|jawab|jawaab) kahan se (late|lete|laate) (ho|hain)$"),
@@ -54,6 +58,22 @@ PATTERNS: dict[str, re.Pattern] = {
 }
 
 REPLIES: dict[str, dict[str, list[str]]] = {
+    "why": {
+        "en": ["Talashly is a self-owned answer engine: it searches its own index of public web pages, can cite the pages an answer came from, and runs without third-party AI APIs. It also works in many languages and keeps no chat history on the server. It is smaller than the biggest commercial models, so for very hard code or maths treat answers as a strong first draft."],
+        "roman": ["Talashly ka apna search index hai, jawab ke sources dikha sakta hai, aur kisi third-party AI API par nahi chalta. Kai zabanon mein kaam karta hai aur server par chat save nahi karta. Sab se bade commercial models se chhota hai, is liye mushkil code ya maths mein jawab ko pehla draft samjhein."],
+    },
+    "limits": {
+        "en": ["I can answer questions, explain topics, write emails, poems and code, and build simple websites. My limits: I can be wrong on very hard code, maths or niche facts, live data (news, prices) depends on what I have indexed, and I decline clearly harmful requests. If I'm unsure I'll say so."],
+        "roman": ["Main sawalon ke jawab, topics ki wazahat, email/poem/code aur simple websites bana sakta hoon. Meri hadein: mushkil code, maths ya niche facts mein ghalti ho sakti hai, taaza data (news, prices) mere index par munhasir hai, aur nuqsandeh cheezon se inkar karta hoon. Yaqeen na ho to saaf bata deta hoon."],
+    },
+    "privacy": {
+        "en": ["Chats are not stored on the server by default; your conversation history stays in your own browser. Only feedback you choose to give (like /good or /bad) is kept."],
+        "roman": ["Chat server par save nahi hoti; aap ki history aap ke apne browser mein rehti hai. Sirf wohi feedback rakha jata hai jo aap khud den (jaise /good ya /bad)."],
+    },
+    "free": {
+        "en": ["Yes, Talashly is free to use, and you can create a free API key for your own apps."],
+        "roman": ["Ji haan, Talashly free hai, aur apni apps ke liye free API key bhi bana sakte hain."],
+    },
     "sad": {
         "en": ["I'm sorry you're feeling this way. Do you want to tell me what happened? I'm here to listen, and I can also suggest small things that might help. If it ever feels too heavy, please talk to someone you trust."],
         "roman": ["Mujhe afsos hai ke aap aisa mehsoos kar rahe hain. Kya hua? Batana chahein to main sun raha hoon, aur chhoti chhoti cheezen bhi suggest kar sakta hoon. Agar bohat bhaari lage to kisi apne se zaroor baat karein."],
@@ -146,6 +166,25 @@ def calc(text: str) -> str | None:
     return f"{re.sub(r'\\s+', ' ', t.replace('**', '^'))} = {v}"
 
 
+CLOCK = re.compile(r"^(what('?s| is)? ?(the )?|tell me (the )?|)(today'?s |current |todays )?(date|time|day)( and (date|time))?( is it)?( today| now| right now)?$|"
+                   r"^(what )?(date|day|time) is (it|today)( now)?$|^(aaj|abhi) (ki |ka )?(date|tarikh|tareekh|time|din|waqt)( kya hai| kia hai| batao)?$|"
+                   r"^(date|time|tarikh) (kya hai|kia hai|batao)$")
+
+
+def clock(t: str, raw: str) -> str | None:
+    """Tareekh/waqt server ki ghadi se (UTC) - LLM ya index andaza na lagaye."""
+    if len(t) > 60 or not CLOCK.match(t):
+        return None
+    import datetime as dt
+    n = dt.datetime.now(dt.timezone.utc)
+    ps = dt.timezone(dt.timedelta(hours=5))
+    p = n.astimezone(ps)
+    if reply_lang(raw) == "en":
+        return (f"Today is {n:%A, %d %B %Y} and it is {n:%H:%M} UTC ({p:%H:%M} in Pakistan time). "
+                "I use the server clock, so for your own time zone please check your device.")
+    return f"Aaj {n:%A, %d %B %Y} hai. Abhi UTC {n:%H:%M} (Pakistan mein {p:%H:%M}) bajay hain."
+
+
 def smalltalk(text: str, model: Model) -> str | None:
     """Sirf choti, saaf baat-cheet (greeting/thanks...) par jawab; asli sawal ko kabhi nahi pakarta."""
     t = re.sub(r"[!?.,؟،۔:;~\"'`]+$", "", text.strip().lower())
@@ -153,6 +192,9 @@ def smalltalk(text: str, model: Model) -> str | None:
     c = calc(text)
     if c:
         return c
+    d = clock(t, text)
+    if d:
+        return d
     if not t or len(t) > 90 or len(t.split()) > 12:
         return None
     for kind, rx in PATTERNS.items():
@@ -189,6 +231,28 @@ def _has_page(history: list[dict] | None) -> bool:
                for h in (history or [])[-6:])
 
 
+def _page_edit(text: str, history: list[dict] | None) -> bool:
+    """Pichhle page ko badalne ki farmaish (edit/upgrade...), na ke bilkul naya "website banao"."""
+    return _has_page(history) and bool(EDIT.search(text)) and not re.search(r"\b(new|another|different|naya|nayi|alag)\b", text, re.I)
+
+
+_STARTER = re.compile(r"^\s*(ok|okay|and|also|now|then|next|so|but|aur|phir|ab|acha|theek)\b", re.I)
+
+
+def _follow_up(text: str) -> bool:
+    """Kya ye pichhli baat ka silsila hai? Warna history LLM ko nahi jati (mukhtalif topics mix na hon)."""
+    if _STARTER.match(text) or (len(text.split()) <= 9 and (FOLLOW.search(text) or EDIT.search(text))):
+        return True
+    return False
+
+
+def _last_site_request(history: list[dict] | None) -> str | None:
+    for h in reversed(history or []):
+        if h.get("role") == "user" and wants_site(str(h.get("content", ""))):
+            return str(h["content"])[:600]
+    return None
+
+
 def format_with_sources(text: str, sources: list[dict]) -> str:
     if not sources:
         return text
@@ -199,7 +263,7 @@ def format_with_sources(text: str, sources: list[dict]) -> str:
 SYSTEM_PROMPT = (
     "You are Talashly's assistant (model MUS 7.01): warm, direct and expert, like a professional human colleague. "
     "First work out what the user actually wants and what a great answer looks like; if truly ambiguous ask ONE short question. "
-    "Reply in the user's language (English by default). Be concise but complete: simple factual questions get 2-4 sentences, not an essay. Do the task instead of explaining why you might not; "
+    "Reply in the user's language (English by default). Be concise but complete: simple factual questions get 2-4 sentences, not an essay; lists and how-tos stay under about 350 words and always finish cleanly. Do the task instead of explaining why you might not; "
     "never say 'I cannot' for ordinary requests. Decline only clearly harmful requests (weapons, malware, self-harm methods, sexual "
     "content involving minors, hate, fraud) briefly, and offer a safe alternative. Never mention sources, searching, an index, or your "
     "training data unless asked. For websites output one complete single-file HTML page using Tailwind CSS via CDN, responsive, in a "
@@ -361,7 +425,7 @@ class Chat:
                 else:
                     talk = tr("fb_none", text)
             verdict = None if talk is not None else policy_check(text)
-            if talk is None and verdict is None and is_unclear(text):
+            if talk is None and verdict is None and (is_unclear(text) or (is_vague(text) and not prev_user and not history)):
                 verdict = "clarify"
             if talk is not None or verdict is not None:
                 talk = talk if talk is not None else tr(verdict, text)  # type: ignore[arg-type]
@@ -515,10 +579,17 @@ class Chat:
             yield "token", build_site(text)
             yield "done", {"mode": "builder"}
             return
-        if site and ready and not fast_llm_available() and not _has_page(history):
+        edit = _page_edit(text, history)
+        if site and ready and not fast_llm_available() and not edit:
             # sirf CPU node: poori website LLM se 60-90 s (10 tok/s); template builder < 1 s mein poora page deta hai.
             # LLM tab jab GPU node zinda ho, ya user pichle page ko edit/upgrade kare (history mein html)
             yield "token", build_site(text)
+            yield "done", {"mode": "builder"}
+            return
+        if edit and not fast_llm_available():
+            # CPU par poora page dobara likhna/prefill 3 min+ lagta hai: asli farmaish + naya hukm jod kar builder se turant naya page
+            base = _last_site_request(history)
+            yield "token", build_site(f"{base or 'website'} {text}")
             yield "done", {"mode": "builder"}
             return
         if model.deep and not (ready and (site or intent(text) == "task")):
@@ -541,16 +612,18 @@ class Chat:
                 yield "token", tr("needllm", text)
                 yield "done", {"mode": "needllm"}
             return
-        if not (site or intent(text) == "task" or weak):
+        quick = short_fact(text) and not wants_sources(text, model) and not model.deep
+        if not (site or intent(text) == "task" or weak or quick):
             return
         msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for h in (history or [])[-6:]:
+        for h in (history or [])[-6:] if (edit or _follow_up(text)) else []:
             if h.get("role") in ("user", "assistant") and h.get("content"):
-                msgs.append({"role": h["role"], "content": str(h["content"])[:9000 if h["role"] == "assistant" else 2000]})
+                msgs.append({"role": h["role"], "content": str(h["content"])[:9000 if (h["role"] == "assistant" and edit) else 1500]})
         msgs.append({"role": "user", "content": text})
         got = False
         try:
-            async for tok in stream_chat(llm, msgs, max_tokens=4000 if (site or CREATIVE.search(text) or "html" in text.lower()) else 700):
+            async for tok in stream_chat(llm, msgs, max_tokens=(4000 if (site or CREATIVE.search(text) or "html" in text.lower())
+                                                                     else 1000 if EXPLAIN.search(text) else 700)):
                 got = True
                 yield "token", tok
             if got:

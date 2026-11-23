@@ -64,7 +64,7 @@ def test_llm_direct_path_for_tasks_with_key_and_history(tmp_path, monkeypatch):
     cfg, app = build(tmp_path)
     cfg["llm"].update(enabled=True, base_url="https://llm.example", api_key="k-123", model="m1", path="/v1/chat/completions")
     with TestClient(app) as c:
-        r = c.post("/api/chat", json={"message": "write a short thank you note", "private": True,
+        r = c.post("/api/chat", json={"message": "also write a short thank you email", "private": True,
                                       "history": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "Hello!"}]},
                    headers={"X-Client-Id": "p" * 24})
         assert "Sure! " in r.text and "llm-direct" in r.text
@@ -289,3 +289,15 @@ def test_compare_and_poem_skills_without_llm(tmp_path):
         assert ev(evs, "done")[0]["mode"] == "skill" and "crawlers vs asyncio" in text
         _, evs = chat(c, "write a poem about rain")
         assert ev(evs, "done")[0]["mode"] == "skill"
+
+
+def test_fresh_task_does_not_get_unrelated_history(tmp_path, monkeypatch):
+    calls = []
+    _fake_llm(monkeypatch, calls)
+    cfg, app = build(tmp_path)
+    cfg["llm"].update(enabled=True, base_url="https://llm.example", api_key="k", model="m1", path="/v1/chat/completions")
+    with TestClient(app) as c:
+        c.post("/api/chat", json={"message": "write a short thank you email", "private": True,
+                                  "history": [{"role": "user", "content": "make a website"}, {"role": "assistant", "content": "<html>x</html>"}]},
+               headers={"X-Client-Id": "p" * 24})
+    assert [m["role"] for m in calls[0][2]["messages"]] == ["system", "user"]

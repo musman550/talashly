@@ -13,6 +13,9 @@ CASES = [
     ("mus-7.01-deep", "write a short email to my landlord about a leaking roof"),
     ("mus-7.01-deep", "create a simple restaurant website with html and css"),
     ("mus-7.01-code", "write a python function that checks if a string is a palindrome"),
+    ("mus-7.01-flash", "what is todays date"),
+    ("mus-7.01-flash", "tell me"),
+    ("mus-7.01-flash", "who wrote Hamlet"),
     ("mus-7.01-polyglot", "اسلام آباد پاکستان کا دارالحکومت کیوں ہے؟"),
 ]
 
