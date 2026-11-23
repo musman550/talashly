@@ -27,6 +27,7 @@ PICKUP_TIMEOUT_S = 4.0   # job itni der mein na uthe to agla node/fallback
 FIRST_TOKEN_S = 30.0     # chhota prompt (3 source) CPU par ~5-10 s; isse der ho to agla node/fallback, user 60 s na ruke
 CHUNK_TIMEOUT_S = 25.0
 MAX_PENDING = 8
+SLOT_WAIT_S = 90.0     # sab slot bhare: itni der khali slot ka intezar (phir fallback)
 SKEW_S = 60
 BREAK_AFTER, BREAK_FOR_S = 3, 30
 
@@ -282,9 +283,22 @@ class Mesh:
         async for t in _stream_chat_raw(cfg, messages, max_tokens, temperature):
             yield t
 
+    def _free_slot(self) -> bool:
+        return any(n.busy + sum(1 for j in self.pending if j.target == n.name and not j.taken.is_set() and not j.cancelled) < n.slots
+                   for n in self.nodes.values() if n.alive())
+
+    async def _wait_slot(self) -> None:
+        """Sab nodes ke slot bhare hon to fallback par girne ki bajaye (jo node ko 'mara hua' bhi kar deta tha) khali slot ka intezar."""
+        if not self.has_alive() or self._free_slot():
+            return
+        t0 = time.time()
+        while time.time() - t0 < SLOT_WAIT_S and self.has_alive() and not self._free_slot():
+            await asyncio.sleep(0.2 + (hash(id(asyncio.current_task())) % 100) / 1000)
+
     async def stream(self, cfg: dict, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.5) -> AsyncIterator[str]:
         """Sab nodes ko order se aazmata hai. Pehla token aane se pehle ki har galti par agla node;
         token aane ke baad galti ho to upar phenk deta hai (caller ya to 'replace' karta hai ya extractive par girta hai)."""
+        await self._wait_slot()
         cands: list[tuple[str, object]] = []
         if cfg.get("enabled"):
             cands.append(("static", cfg))

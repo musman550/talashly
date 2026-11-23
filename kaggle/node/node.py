@@ -113,11 +113,15 @@ def get_model(urls: list[str]) -> str:
     raise RuntimeError("koi model download nahi hua")
 
 
+SLOTS = 4
+
+
 def start_server(server: str, model: str, gpu: bool):
     libdir = os.path.dirname(server)
     env = dict(os.environ, LD_LIBRARY_PATH=libdir + ":" + os.environ.get("LD_LIBRARY_PATH", ""))
     # 2 slot: har slot ko aadha ctx. GPU par 16384 (har slot 8192: poori website jaisa lamba jawab), CPU par 8192
-    args = [server, "-m", model, "--host", "127.0.0.1", "--port", "8081", "-c", "16384" if gpu else "8192", "--parallel", "2", "-t", str(os.cpu_count() or 4)]
+    # (ab 4 slot: ek saath zyada users; CPU par batch-decode se total tok/s barhta hai. 30 GB RAM mein KV cache aaram se)
+    args = [server, "-m", model, "--host", "127.0.0.1", "--port", "8081", "-c", "24576" if gpu else "12288", "--parallel", str(SLOTS), "-t", str(os.cpu_count() or 4)]
     if gpu:
         args += ["-ngl", "99"]
     logf = open(f"{W}/llama.log", "a")
@@ -156,7 +160,7 @@ def bring_up():
 
 async def serve(proc, kind):
     from engine.relaynode import RelayWorker
-    w = RelayWorker(SITE, SECRET, "http://127.0.0.1:8081", name=NAME, model="qwen3", slots=2,
+    w = RelayWorker(SITE, SECRET, "http://127.0.0.1:8081", name=NAME, model="qwen3", slots=SLOTS,
                     max_runtime_s=max(60.0, HOURS * 3600 - (time.time() - T0)), log=log, tier=3 if kind == "gpu" else 1)
 
     async def watchdog():   # llama mar jaye to notebook khatam: guard naya chala dega

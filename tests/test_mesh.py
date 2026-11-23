@@ -548,3 +548,24 @@ def test_job_targeted_at_one_node_is_not_stolen_by_another():
         return got
     got = asyncio.run(go())
     assert got and got["id"]
+
+
+def test_wait_slot_waits_for_free_slot_then_returns():
+    import asyncio
+    from engine import mesh as M
+    m = M.Mesh()
+    n = m.touch("n1", "q", slots=1)
+    n.busy = 1
+
+    async def go():
+        async def free():
+            await asyncio.sleep(0.5)
+            n.busy = 0
+            n.last_seen = time.time()
+        t0 = time.time()
+        asyncio.create_task(free())
+        await m._wait_slot()
+        return time.time() - t0
+    dt = asyncio.run(go())
+    assert 0.4 < dt < 3
+    assert asyncio.run(M.Mesh()._wait_slot()) is None   # koi node nahi: foran
