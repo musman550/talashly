@@ -23,7 +23,7 @@ DEFAULTS: dict[str, Any] = {
                "cors": True},
     "site": {"name": "Talashly", "url": "http://127.0.0.1:8000"},
     # chat: max_concurrent = ek waqt mein kitne jawab ban sakte hain; queue_max = intezar mein kitne; 0 quota = unlimited
-    "chat": {"max_concurrent": 16, "queue_max": 200, "max_message_chars": 4000, "max_convs_per_owner": 100,
+    "chat": {"max_concurrent": 48, "queue_max": 300, "max_message_chars": 4000, "max_convs_per_owner": 100,
              "max_msgs_per_conv": 400, "anon_rate_per_min": 20, "key_rate_per_min": 60, "daily_quota_anon": 200,
              "daily_quota_key": 5000, "signup_enabled": True, "signup_per_hour_per_ip": 5, "private_default": True},
     "brain": {
