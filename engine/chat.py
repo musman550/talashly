@@ -284,6 +284,7 @@ def qkey(text: str) -> str:
 LEARN_TTL_DAYS = 60      # purane yaad kiye jawab 60 din baad khud hat jate hain (knowledge decay)
 CACHE_TTL_S = 900        # tez jawab: wahi sawal 15 minute tak memory se
 CACHE_MAX = 300
+QUEUE_WAIT_S = 25.0
 LEARN_MIN_VOTERS = 3  # itne alag log 👍 den tab hi jawab "seekha hua" mana jata hai (ek akela bigaar na sake)
 
 
@@ -344,7 +345,10 @@ class Chat:
             return False
         self.waiting += 1
         try:
-            await self._sem.acquire()
+            # itna intezar nahi: 25 s mein jagah na mile to saaf "busy" (user atka na rahe, retry kare)
+            await asyncio.wait_for(self._sem.acquire(), QUEUE_WAIT_S)
+        except asyncio.TimeoutError:
+            return False
         finally:
             self.waiting -= 1
         self.active += 1
@@ -389,9 +393,15 @@ class Chat:
             else:
                 new_conv = True  # asli conversation lock milne ke baad banti hai (busy hone par khali chat na bane)
 
-        if not await self._acquire():
-            yield "error", {"code": "busy", "message": tr("busy", text)}
-            return
+        # halke kaam (greeting/date/calc/clarify/builder/refuse/commands) slot nahi lete: bhari load mein bhi foran jawab
+        cheap = (text.startswith("/") or smalltalk(text, model) is not None or policy_check(text) is not None
+                 or is_unclear(text) or (is_vague(text) and not history and not prev_user) or (wants_site(text) and not fast_llm_available()))
+        held = False
+        if not cheap:
+            if not await self._acquire():
+                yield "error", {"code": "busy", "message": tr("busy", text)}
+                return
+            held = True
         buf = ""
         sources: list[dict] = []
         done: dict = {}
@@ -508,7 +518,8 @@ class Chat:
                     self._add(conv_id, "assistant", buf, {"sources": sources, "done": {"mode": "interrupted"}})  # type: ignore[arg-type]
                 except Exception:  # noqa: BLE001
                     pass
-            self._release()
+            if held:
+                self._release()
 
     def _cache_get(self, key: tuple) -> tuple[str, str] | None:
         e = self._cache.get(key)

@@ -105,7 +105,7 @@ def one(i):
                     elif ev == "replace" and isinstance(d, str):
                         text = d
                     elif ev == "error":
-                        err = "stream-error " + str(d)[:70]
+                        err = "stream-error " + (str(d.get('code')) if isinstance(d, dict) else str(d)[:30])
                     elif ev == "done" and isinstance(d, dict):
                         mode = d.get("mode", "")
     except urllib.error.HTTPError as e:

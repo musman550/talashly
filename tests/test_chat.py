@@ -288,6 +288,30 @@ def test_busy_when_queue_full_and_recovers(tmp_path):
     asyncio.run(go())
 
 
+def test_cheap_messages_bypass_full_slots(tmp_path):
+    cfg, app = build(tmp_path, chat={"max_concurrent": 1, "queue_max": 0})
+    ch = Chat(cfg, app.state.db, app.state.brain, None)  # type: ignore[arg-type]
+    gate = asyncio.Event()
+
+    async def slow(*a, **k):
+        await gate.wait()
+        yield "token", "ok "
+        yield "done", {"mode": "extractive"}
+    ch.brain = type("B", (), {"run": staticmethod(slow)})()  # type: ignore[assignment]
+
+    async def go():
+        first = asyncio.create_task(_drain(ch.stream("o", "user", "question one", None, None)))
+        await asyncio.sleep(0.05)
+        for q in ("hello", "what is todays date", "12*12", "tell me"):
+            out = await _drain(ch.stream("o", "user", q, None, None))
+            assert out[-1][0] == "done", q
+        heavy = [e async for e in ch.stream("o", "user", "question two", None, None)]
+        assert heavy[0][1]["code"] == "busy"
+        gate.set()
+        await first
+    asyncio.run(go())
+
+
 def test_queue_waits_instead_of_failing(tmp_path):
     cfg, app = build(tmp_path, chat={"max_concurrent": 1, "queue_max": 5})
     ch = Chat(cfg, app.state.db, app.state.brain, None)  # type: ignore[arg-type]

@@ -260,6 +260,14 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
         running = bool(sup.crawler and sup.crawler.running)
         return {"index": c, "crawler": st, "last_indexed_at": last, "top_domains": top, "crawler_running": running}
 
+    def _mem() -> dict:
+        import resource
+        try:
+            rss = int(open("/proc/self/statm").read().split()[1]) * resource.getpagesize() // 1048576
+        except Exception:  # noqa: BLE001
+            rss = None
+        return {"rss_mb": rss, "peak_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024}
+
     @app.get("/api/health")
     async def api_health():
         beat = db.get_stat("heartbeat", 0)
@@ -267,6 +275,7 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
         llm_ok = await llm_alive(cfg["llm"]["base_url"]) if cfg["llm"]["enabled"] else None
         return {
             "status": "ok", "uptime_s": round(time.time() - sup.started),
+            "mem": _mem(), "chat": {"active": chat.active, "waiting": chat.waiting},
             "crawler": {"enabled": sup.do_crawl, "running": bool(sup.crawler and sup.crawler.running),
                         "heartbeat_age_s": round(time.time() - beat) if beat else None, "restarts": sup.restarts},
             "index": {"docs": c["docs"], "chunks": c["chunks"], "size_mb": round(db.size_mb(), 1)},
