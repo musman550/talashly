@@ -271,6 +271,11 @@ SYSTEM_PROMPT = (
 )
 
 
+# Har jawab kahan se aaya: model (apna open-source LLM), index (apna crawl), rule (fixed code/builder), learned (users ke 👍)
+ORIGIN = {"llm": "model", "llm-direct": "model", "extractive": "index", "builder": "rule", "chat": "rule", "clarify": "rule",
+          "refuse": "rule", "skill": "rule", "learned": "learned", "needllm": "rule", "error": "rule", "none": "index"}
+
+
 def qkey(text: str) -> str:
     """Sawal ki pehchaan: chhote huroof, sirf alfaaz (spaces/punctuation ka farq nahi)."""
     return " ".join(re.findall(r"\w+", text.lower()))[:200]
@@ -489,6 +494,7 @@ class Chat:
                             done = {"mode": "error", "model": model.id}
                         if not show and eq == text and done.get("mode") in ("extractive", "llm") and buf and len(buf) < 4000:
                             self._cache_put(ckey, buf, done["mode"])
+            done["origin"] = ORIGIN.get(done.get("mode", ""), "index")
             done["sources_shown"] = bool(show and sources)
             done["took_ms"] = round((time.time() - t0) * 1000)
             if persist:

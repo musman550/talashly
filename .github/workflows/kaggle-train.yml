@@ -98,6 +98,7 @@ jobs:
         if: steps.sec.outputs.ok == 'true'
         run: |
           f="$(ls out/*.gguf 2>/dev/null | head -1)"
+          if grep -q '"gate": "rejected"' out/status.json 2>/dev/null; then echo "Eval gate: naya model behtar nahi, purana model barqarar (release nahi)"; exit 0; fi
           if [ -z "$f" ]; then echo "GGUF nahi bana (log upar dekhein)"; exit 1; fi
           (cd out && zip -qr lora.zip lora 2>/dev/null || true)
           gh release delete model-latest --cleanup-tag -y 2>/dev/null || true

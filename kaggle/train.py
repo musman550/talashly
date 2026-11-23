@@ -204,6 +204,15 @@ def train(ex):
     cut = max(1, len(data) // 20)
     val, tr = data[:cut], data[cut:]
     log("train/val", len(tr), len(val))
+    def vloss():
+        with torch.no_grad(), torch.autocast("cuda", dtype=torch.float16):
+            return sum(model(input_ids=a.to("cuda:0"), labels=b.to("cuda:0")).loss.item() for a, b in val) / len(val)
+    model.eval()
+    with model.disable_adapter():   # eval gate: asli (base) model ka held-out loss, training se pehle
+        base_vl = vloss()
+    STATUS["base_val_loss"] = round(base_vl, 4)
+    log("base val loss", base_vl)
+    model.train()
     params = [p for p in model.parameters() if p.requires_grad]
     opt = torch.optim.AdamW(params, lr=2e-4, weight_decay=0.0)
     scaler = torch.cuda.amp.GradScaler()
@@ -233,10 +242,12 @@ def train(ex):
             log("train: time budget khatam")
             break
     model.eval()
-    with torch.no_grad(), torch.autocast("cuda", dtype=torch.float16):
-        vl = sum(model(input_ids=a.to("cuda:0"), labels=b.to("cuda:0")).loss.item() for a, b in val) / len(val)
+    vl = vloss()
     STATUS["val_loss"] = round(vl, 4)
-    log("val loss", vl)
+    STATUS["gate"] = "pass" if vl < base_vl * 0.98 else "rejected"   # kam se kam 2% behtar na ho to release nahi
+    log("val loss", vl, "gate", STATUS["gate"])
+    if STATUS["gate"] != "pass":
+        return
     model.save_pretrained(f"{W}/lora")
     merged = model.merge_and_unload()
     merged.save_pretrained(f"{W}/merged", safe_serialization=True)
@@ -264,8 +275,10 @@ if __name__ == "__main__":
     examples = teacher(passages) if passages else None
     if examples and len(examples) >= 100:
         train(examples)
-        if STATUS["stages"].get("train", {}).get("ok"):
+        if STATUS["stages"].get("train", {}).get("ok") and STATUS.get("gate") == "pass":
             gguf()
+        elif STATUS.get("gate") == "rejected":
+            log("eval gate: naya model base se behtar nahi, release nahi hoga (purana model rehta hai)")
     else:
         log("teacher se kam examples (<100): training chhodi")
     cleanup()

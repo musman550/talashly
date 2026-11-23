@@ -1,0 +1,19 @@
+name: loadtest
+on:
+  workflow_dispatch:
+    inputs:
+      users:
+        description: "Ek saath kitne users"
+        default: "100"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy
+      - run: python3 deploy/loadtest.py "http://137.23.39.13:8000" "${{ inputs.users }}" | tee /tmp/out.txt
+      - if: always()
+        run: |
+          { echo '```'; cat /tmp/out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
