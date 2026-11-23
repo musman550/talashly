@@ -312,6 +312,26 @@ def test_cheap_messages_bypass_full_slots(tmp_path):
     asyncio.run(go())
 
 
+def test_identical_concurrent_questions_are_computed_once(tmp_path):
+    cfg, app = build(tmp_path, chat={"max_concurrent": 1, "queue_max": 0})
+    ch = Chat(cfg, app.state.db, app.state.brain, None)  # type: ignore[arg-type]
+    calls = []
+
+    async def slow(*a, **k):
+        calls.append(1)
+        await asyncio.sleep(0.2)
+        yield "token", "the answer "
+        yield "done", {"mode": "extractive"}
+    ch.brain = type("B", (), {"run": staticmethod(slow)})()  # type: ignore[assignment]
+
+    async def go():
+        outs = await asyncio.gather(*[_drain(ch.stream(f"o{i}", "user", "unique shared question", None, None)) for i in range(5)])
+        assert len(calls) == 1 and all(o[-1][0] == "done" for o in outs)
+        assert all("the answer" in "".join(d for e, d in o if e == "token") for o in outs)
+        assert not ch._inflight and ch.active == 0
+    asyncio.run(go())
+
+
 def test_queue_waits_instead_of_failing(tmp_path):
     cfg, app = build(tmp_path, chat={"max_concurrent": 1, "queue_max": 5})
     ch = Chat(cfg, app.state.db, app.state.brain, None)  # type: ignore[arg-type]

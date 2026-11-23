@@ -296,6 +296,7 @@ class Chat:
         self.waiting = 0
         self.active = 0
         self._cache: OrderedDict[tuple, tuple[float, str, str]] = OrderedDict()
+        self._inflight: dict[tuple, asyncio.Event] = {}   # wahi sawal ek saath: ek banaye, baqi uska jawab len
 
     # ---------------------------------------------------------------- storage
     def new_conv(self, owner: str, model: str, title: str = "") -> str:
@@ -397,11 +398,30 @@ class Chat:
         cheap = (text.startswith("/") or smalltalk(text, model) is not None or policy_check(text) is not None
                  or is_unclear(text) or (is_vague(text) and not history and not prev_user) or (wants_site(text) and not fast_llm_available()))
         held = False
+        ckey0 = (model.id, qkey(text))
+        lead = False
+        if not cheap and not history and not wants_sources(text, model):
+            ev0 = self._inflight.get(ckey0)
+            if ev0 is not None:
+                try:
+                    await asyncio.wait_for(ev0.wait(), 90)
+                except asyncio.TimeoutError:
+                    pass
+                if self._cache_get(ckey0):
+                    cheap = True   # pehle wale ne jawab bana kar yaad kar liya: slot ki zaroorat nahi
+            else:
+                self._inflight[ckey0] = asyncio.Event()
+                lead = True
         if not cheap:
             if not await self._acquire():
+                if lead:
+                    self._inflight.pop(ckey0, asyncio.Event()).set()
                 yield "error", {"code": "busy", "message": tr("busy", text)}
                 return
             held = True
+        elif lead:
+            self._inflight.pop(ckey0, asyncio.Event()).set()
+            lead = False
         buf = ""
         sources: list[dict] = []
         done: dict = {}
@@ -459,6 +479,8 @@ class Chat:
                 if smart_done is not None:
                     done = dict(smart_done)
                     done["model"] = model.id
+                    if done.get("mode") == "llm-direct" and not show and not history and buf and len(buf) < 4000:
+                        self._cache_put((model.id, qkey(text)), buf, "llm-direct")
                 else:
                     eq = contextualize(text, prev_user)
                     ckey = (model.id, qkey(text))
@@ -518,6 +540,8 @@ class Chat:
                     self._add(conv_id, "assistant", buf, {"sources": sources, "done": {"mode": "interrupted"}})  # type: ignore[arg-type]
                 except Exception:  # noqa: BLE001
                     pass
+            if lead:
+                self._inflight.pop(ckey0, asyncio.Event()).set()
             if held:
                 self._release()
 
@@ -588,6 +612,12 @@ class Chat:
             if got:  # users ke 👍 se seekha hua jawab: milliseconds mein
                 yield "token", got
                 yield "done", {"mode": "learned"}
+                return
+        if not history and not wants_sources(text, model):
+            hit = self._cache_get((model.id, qkey(text)))
+            if hit:   # pehle bana hua jawab: milliseconds mein
+                yield "token", hit[0]
+                yield "done", {"mode": hit[1], "cached": True}
                 return
         llm = self.cfg["llm"]
         ready = llm_available(llm)

@@ -298,7 +298,7 @@ def test_relay_worker_through_site_with_bye_and_fallback(tmp_path):
             await asyncio.wait_for(task, 30)
             assert not MESH.has_alive(), "bye: turant mara hua"
             t0 = time.time()
-            text2, m2 = await ask(c, "write an email to my landlord about rain")
+            text2, m2 = await ask(c, "write an email to my landlord about noise")
             return text2, m2, time.time() - t0
     text2, m2, dt = asyncio.run(go())
     assert "NODE says" not in text2 and m2 != "llm-direct" and dt < 3, (text2, m2, dt)
