@@ -36,8 +36,8 @@ jobs:
       - if: steps.s.outputs.go == '1'
         run: |
           rm -f /tmp/a1_done
-          for i in $(seq 1 50); do
+          for i in $(seq 1 22); do
             bash deploy/oci-a1.sh || exit 1
             [ -f /tmp/a1_done ] && exit 0
-            sleep 60
+            sleep 120
           done
