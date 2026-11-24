@@ -273,7 +273,7 @@ SYSTEM_PROMPT = (
 
 # Har jawab kahan se aaya: model (apna open-source LLM), index (apna crawl), rule (fixed code/builder), learned (users ke 👍)
 ORIGIN = {"llm": "model", "llm-direct": "model", "extractive": "index", "builder": "rule", "chat": "rule", "clarify": "rule",
-          "refuse": "rule", "skill": "rule", "learned": "learned", "needllm": "rule", "error": "rule", "none": "index"}
+          "refuse": "rule", "skill": "rule", "learned": "learned", "needllm": "rule", "agent": "model", "error": "rule", "none": "index"}
 
 
 def qkey(text: str) -> str:
@@ -499,8 +499,10 @@ class Chat:
                 if smart_done is not None:
                     done = dict(smart_done)
                     done["model"] = model.id
-                    if done.get("mode") == "llm-direct" and not show and not history and buf and len(buf) < 4000:
-                        self._cache_put((model.id, qkey(text)), buf, "llm-direct")
+                    if (done.get("mode") == "llm-direct" or (done.get("mode") == "agent" and "clock" not in done["agent"]["plan"]
+                                                             and not done["agent"]["errors"])) \
+                            and not show and not history and buf and len(buf) < 4000:
+                        self._cache_put((model.id, qkey(text)), buf, done["mode"])
                 else:
                     eq = contextualize(text, prev_user)
                     ckey = (model.id, qkey(text))
@@ -643,6 +645,11 @@ class Chat:
                 yield "token", hit[0]
                 yield "done", {"mode": hit[1], "cached": True}
                 return
+        if model.agent:
+            from . import agent
+            async for ev, data in agent.run(self, text, history, prev_user, model):
+                yield ev, data
+            return
         llm = self.cfg["llm"]
         ready = llm_available(llm)
         site = wants_site(text)

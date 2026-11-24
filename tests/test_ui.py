@@ -73,7 +73,7 @@ def test_home_loads_clean(server, page):
     url, _ = server
     page.goto(url)
     page.wait_for_selector("#model option", state="attached")
-    assert page.locator("#model option").count() == 5
+    assert page.locator("#model option").count() == 6
     assert page.locator("h1").inner_text().startswith("What do you want")
     assert page.title().startswith("Talashly")
     assert page.errors == []

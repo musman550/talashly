@@ -101,7 +101,7 @@ def test_contextualize():
 # ------------------------------------------------------------------ models
 def test_models_distinct_and_free():
     assert "mus-7.01" in MODELS and len(MODELS) >= 5
-    sigs = {(m.deep, m.live, m.sentences, m.sources, m.weak_cov, m.code_first) for m in MODELS.values()}
+    sigs = {(m.deep, m.live, m.sentences, m.sources, m.weak_cov, m.code_first, m.agent) for m in MODELS.values()}
     assert len(sigs) == len(MODELS), "har model ka behaviour alag hona chahiye"
     assert get_model(None).id == "mus-7.01" and get_model("nope").id == "mus-7.01"
     assert get_model("nope", strict=True) is None and get_model("MUS-7.01-FLASH", strict=True).id == "mus-7.01-flash"

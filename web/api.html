@@ -62,7 +62,7 @@ console.log((await r.json()).choices[0].message.content);</code></pre>
 <tr><td>GET</td><td><code>/api/health</code></td><td>Server and index status</td></tr>
 </tbody></table>
 <h2>Models</h2>
-<table><thead><tr><th>Model</th><th>Best for</th></tr></thead><tbody><tr><td><code>mus-7.01</code></td><td>Balanced - roz ke sawalon ke liye</td></tr><tr><td><code>mus-7.01-flash</code></td><td>Sab se tez</td></tr><tr><td><code>mus-7.01-deep</code></td><td>Gehri research</td></tr><tr><td><code>mus-7.01-code</code></td><td>Coding madad</td></tr><tr><td><code>mus-7.01-polyglot</code></td><td>Har zaban ke liye</td></tr></tbody></table>
+<table><thead><tr><th>Model</th><th>Best for</th></tr></thead><tbody><tr><td><code>mus-7.01</code></td><td>Balanced - roz ke sawalon ke liye</td></tr><tr><td><code>mus-7.01-flash</code></td><td>Sab se tez</td></tr><tr><td><code>mus-7.01-deep</code></td><td>Gehri research</td></tr><tr><td><code>mus-7.01-code</code></td><td>Coding madad</td></tr><tr><td><code>mus-7.01-agent</code></td><td>Plan + tools + code check</td></tr><tr><td><code>mus-7.01-polyglot</code></td><td>Har zaban ke liye</td></tr></tbody></table>
 <h2>Limits and errors</h2>
 <p>Each key has a per-minute rate limit and a daily quota so that one user cannot overload the server. Errors use the OpenAI shape: <code>{"error":{"message":"...","type":"...","code":"..."}}</code>. Status <code>401</code> bad or missing key, <code>404</code> unknown model, <code>429</code> rate limit or quota, <code>503</code> server busy (retry shortly).</p>
 <p>Token counts in <code>usage</code> are approximate word counts. A <code>Sources:</code> list is appended only for <code>mus-7.01-deep</code> or when the question asks for sources.</p>

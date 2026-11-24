@@ -23,11 +23,12 @@ class Model:
     weak_cov: float | None = None  # is se kam coverage par live research chalta hai (None = default)
     code_first: bool = False     # pehle apna code index dekho
     context: str = "balanced"
+    agent: bool = False          # tools + planner (engine/agent.py)
 
     def public(self) -> dict:
         return {"id": self.id, "name": self.name, "tagline": self.tagline, "description": self.description,
                 "free": True, "deep": self.deep, "live_research": self.live, "max_sentences": self.sentences,
-                "max_sources": self.sources, "code_first": self.code_first}
+                "max_sources": self.sources, "code_first": self.code_first, "agent": self.agent}
 
 
 MODELS: dict[str, Model] = {m.id: m for m in (
@@ -42,6 +43,10 @@ MODELS: dict[str, Model] = {m.id: m for m in (
     Model("mus-7.01-code", "MUS 7.01 Code", "Coding help",
           "Searches code you indexed first (functions, classes, identifiers), then documentation.",
           code_first=True, sentences=6, sources=6, context="code"),
+    Model("mus-7.01-agent", "MUS 7.01 Agent", "Plans, uses tools, checks its work",
+          "Makes a plan, runs tools in parallel (calculator, clock, your index, web pages you paste, a safe Python sandbox that tests the code it writes), "
+          "then writes one compact answer. Uses very few tokens; shows every step.",
+          sentences=8, sources=6, context="agent", agent=True),
     Model("mus-7.01-polyglot", "MUS 7.01 Polyglot", "Any language",
           "Urdu, Arabic, Hindi, Chinese, Russian and more. Fetches live pages in the question's language sooner when the index is thin.",
           weak_cov=0.9, sentences=5, sources=8, context="multilingual"),
