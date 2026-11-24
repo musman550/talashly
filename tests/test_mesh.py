@@ -256,10 +256,10 @@ def build_site(tmp_path, **chat):
     return cfg, create_app(cfg, seeds=[], sources=[], crawl=False)
 
 
-async def ask(client, q, history=None, model="mus-7.01"):
+async def ask(client, q, history=None, model="mus-7.01", cid="t1"):
     text, mode, ev = "", None, None
     async with client.stream("POST", "/api/chat", json={"message": q, "private": True, "model": model, "history": history or []},
-                             headers={"X-Client-Id": "t1"}, timeout=30) as r:
+                             headers={"X-Client-Id": cid}, timeout=30) as r:
         assert r.status_code == 200, r.status_code
         async for line in r.aiter_lines():
             if line.startswith("event: "):
@@ -372,10 +372,10 @@ def test_real_http_load_with_flapping_node(tmp_path):
         results = []
 
         async def user(i):
-            async with httpx.AsyncClient(base_url=site) as c:
+            async with httpx.AsyncClient(base_url=site, headers={"X-Client-Id": f"user{i:019d}"}) as c:
                 t0 = time.time()
                 try:
-                    text, m = await ask(c, f"write an email number {i} to my landlord")
+                    text, m = await ask(c, f"write an email number {i} to my landlord", cid=f"user{i:019d}")
                     results.append((i, bool(text.strip()), m, time.time() - t0))
                 except Exception as e:  # noqa: BLE001
                     results.append((i, False, repr(e), time.time() - t0))

@@ -551,3 +551,30 @@ def test_policy_greetings_clarify_refuse_and_deep_shows_sources(tmp_path):
         assert ev(e, "done")[0]["mode"] == "support"
         _, e = chat(c, "what does a polite crawler do", model="mus-7.01-deep")
         assert "sources" in names(e) and ev(e, "done")[0]["sources_shown"] is True
+
+
+def test_owner_cap_and_queue_message(tmp_path):
+    cfg, app = build(tmp_path, chat={"max_concurrent": 1, "queue_max": 5})
+    ch = Chat(cfg, app.state.db, app.state.brain, None)  # type: ignore[arg-type]
+    gate = asyncio.Event()
+
+    async def slow(*a, **k):
+        await gate.wait()
+        yield "token", "ok "
+        yield "done", {"mode": "extractive"}
+    ch.brain = type("B", (), {"run": staticmethod(slow)})()  # type: ignore[assignment]
+
+    async def go():
+        a = asyncio.create_task(_drain(ch.stream("same", "user", "heavy question number one", None, None)))
+        await asyncio.sleep(0.05)
+        b = asyncio.create_task(_drain(ch.stream("same", "user", "heavy question number two", None, None)))
+        await asyncio.sleep(0.05)
+        third = [e async for e in ch.stream("same", "user", "heavy question number three", None, None)]
+        assert third[0][1]["code"] == "busy" and "two answers" in third[0][1]["message"]
+        other = asyncio.create_task(_drain(ch.stream("someone", "user", "another users heavy question", None, None)))
+        await asyncio.sleep(0.05)
+        gate.set()
+        outs = await asyncio.gather(a, b, other)
+        assert any(e == "step" and "number" in d["msg"] for e, d in outs[1]), outs[1][:3]   # b ko queue ka number dikha
+        assert ch._per_owner == {} and ch.active == 0
+    asyncio.run(go())

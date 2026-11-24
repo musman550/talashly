@@ -285,6 +285,7 @@ LEARN_TTL_DAYS = 60      # purane yaad kiye jawab 60 din baad khud hat jate hain
 CACHE_TTL_S = 900        # tez jawab: wahi sawal 15 minute tak memory se
 CACHE_MAX = 300
 QUEUE_WAIT_S = 100.0
+OWNER_MAX = 2   # ek user ek waqt mein itne bhaari sawal (baqi users ko jagah milti rahe)
 LEARN_MIN_VOTERS = 3  # itne alag log 👍 den tab hi jawab "seekha hua" mana jata hai (ek akela bigaar na sake)
 
 
@@ -296,6 +297,8 @@ class Chat:
         self.waiting = 0
         self.active = 0
         self._cache: OrderedDict[tuple, tuple[float, str, str]] = OrderedDict()
+        self._per_owner: dict[str, int] = {}      # har user ke chalte/intezar mein bhaari sawal (fairness)
+        self._svc_s = 25.0                         # bhaari jawab ka ausat waqt (EMA) -> queue ka andaza
         self._inflight: dict[tuple, asyncio.Event] = {}   # wahi sawal ek saath: ek banaye, baqi uska jawab len
 
     # ---------------------------------------------------------------- storage
@@ -355,6 +358,12 @@ class Chat:
         self.active += 1
         return True
 
+    def queue_eta(self) -> tuple[int, int]:
+        """(aap ka number, andaza second): jab sab slot bhare hon."""
+        n = self.waiting + 1
+        slots = max(1, int(self.c["max_concurrent"]))
+        return n, int(max(1, n / slots) * self._svc_s)
+
     def _release(self) -> None:
         self.active -= 1
         assert self._sem is not None
@@ -412,8 +421,19 @@ class Chat:
             else:
                 self._inflight[ckey0] = asyncio.Event()
                 lead = True
+        if not cheap and self._per_owner.get(owner, 0) >= OWNER_MAX:
+            if lead:
+                self._inflight.pop(ckey0, asyncio.Event()).set()
+            yield "error", {"code": "busy", "message": tr("owner_busy", text)}
+            return
         if not cheap:
+            if self._sem is not None and self._sem.locked() and self.waiting < int(self.c["queue_max"]):
+                n_, s_ = self.queue_eta()
+                yield "step", {"msg": tr("queued", text, n=n_, s=s_)}
+            self._per_owner[owner] = self._per_owner.get(owner, 0) + 1
+            t_hold = time.time()
             if not await self._acquire():
+                self._per_owner[owner] = max(0, self._per_owner.get(owner, 1) - 1)
                 if lead:
                     self._inflight.pop(ckey0, asyncio.Event()).set()
                 yield "error", {"code": "busy", "message": tr("busy", text)}
@@ -543,6 +563,10 @@ class Chat:
             if lead:
                 self._inflight.pop(ckey0, asyncio.Event()).set()
             if held:
+                self._svc_s = 0.9 * self._svc_s + 0.1 * min(120.0, max(2.0, time.time() - t_hold))
+                self._per_owner[owner] = max(0, self._per_owner.get(owner, 1) - 1)
+                if not self._per_owner[owner]:
+                    self._per_owner.pop(owner, None)
                 self._release()
 
     def _cache_get(self, key: tuple) -> tuple[str, str] | None:

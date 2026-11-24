@@ -75,6 +75,14 @@ MSG: dict[str, dict[str, str]] = {
         "en": "The server is very busy right now. Please try again in a few seconds.",
         "roman": "Server abhi bohat masroof hai. Kuch second baad dobara koshish karein.",
         "ur": "سرور ابھی بہت مصروف ہے۔ چند سیکنڈ بعد دوبارہ کوشش کریں۔"},
+    "queued": {
+        "en": "Many people are asking right now. You are number {n} in line (about {s} s). Your answer will start automatically.",
+        "roman": "Abhi bohat log pooch rahe hain. Aap ka number {n} hai (taqreeban {s} second). Jawab khud shuru ho jayega.",
+        "ur": "ابھی بہت لوگ پوچھ رہے ہیں۔ آپ کا نمبر {n} ہے (تقریباً {s} سیکنڈ)۔ جواب خود شروع ہو جائے گا۔"},
+    "owner_busy": {
+        "en": "You already have two answers being prepared. Please wait for one to finish, then ask again.",
+        "roman": "Aap ke do jawab pehle se ban rahe hain. Ek khatam hone dein, phir dobara poochein.",
+        "ur": "آپ کے دو جواب پہلے سے بن رہے ہیں۔ ایک مکمل ہونے دیں، پھر دوبارہ پوچھیں۔"},
     "empty": {"en": "Empty message. Please type something.", "roman": "Khali message. Kuch likhein.", "ur": "خالی پیغام۔ کچھ لکھیں۔"},
     "too_long": {
         "en": "Message is too long (max {n} characters).", "roman": "Message bohat lamba hai (max {n} characters).",

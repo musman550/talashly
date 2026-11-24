@@ -2,7 +2,7 @@ name: oracle-a1
 # Oracle Always-Free A1 (4 core / 24 GB) khud banata hai jab capacity mile. Secrets: OCI_USER OCI_TENANCY OCI_FINGERPRINT OCI_REGION OCI_KEY SSH_PUBKEY MESH_SECRET
 on:
   schedule:
-    - cron: "7 * * * *"   # GitHub cron kam chalta hai, isliye har run andar se ~55 minute har minute koshish karta hai
+    - cron: "17 3 * * *"   # din mein 1 baar; ek run andar se ~5 ghante har 2 minute koshish karta hai (ban jaye to baqi din ke run foran "already exists" par khatam)
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,7 +12,7 @@ concurrency:
 jobs:
   try:
     runs-on: ubuntu-latest
-    timeout-minutes: 58
+    timeout-minutes: 335
     env:
       OCI_USER: ${{ secrets.OCI_USER }}
       OCI_TENANCY: ${{ secrets.OCI_TENANCY }}
@@ -36,7 +36,7 @@ jobs:
       - if: steps.s.outputs.go == '1'
         run: |
           rm -f /tmp/a1_done
-          for i in $(seq 1 22); do
+          for i in $(seq 1 150); do
             bash deploy/oci-a1.sh || exit 1
             [ -f /tmp/a1_done ] && exit 0
             sleep 120
