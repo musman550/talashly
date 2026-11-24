@@ -29,7 +29,22 @@ CODE_Q = re.compile(r"\b(python|script|program|function|algorithm|code|implement
 DO_Q = re.compile(r"\b(write|create|make|build|implement|find|compute|calculate|simulate|generate|solve|check|verify|test|likho|banao|nikalo)\b", re.I)
 TIME_Q = re.compile(r"\b(today|now|current(ly)?|aaj|abhi)\b.*\b(date|time|day|tarikh|waqt|din)\b|\b(date|time|day|tarikh|waqt|din)\b.*\b(today|now|aaj|abhi)\b|"
                     r"\bwhat('?s| is) the (date|time)\b", re.I)
-PY_BLOCK = re.compile(r"```(?:python|py)\s*\n(.*?)```", re.S | re.I)
+PY_BLOCK = re.compile(r"```[ \t]*(?:python3?|py)?[ \t]*\r?\n(.*?)(?:```|\Z)", re.S | re.I)
+
+
+def find_python(text: str) -> str | None:
+    """Jawab mein pehla python code block: ```python / ```py / bina naam ke, aur band na hone par bhi; sirf agar valid python ho."""
+    import ast
+    for m in PY_BLOCK.finditer(text):
+        code = m.group(1).strip()
+        if not code:
+            continue
+        try:
+            ast.parse(code)
+        except SyntaxError:
+            continue
+        return code
+    return None
 
 SYSTEM = ("You are Talashly Agent. TOOL RESULTS are ground truth: use them, never contradict them, and cite sources like [1]. "
           "Answer in the user's language. Be complete but compact: no filler, no repeated points. "
@@ -193,10 +208,14 @@ async def run(chat: Any, text: str, history: list[dict] | None, prev_user: str |
             chat.db.log("error", f"agent llm failed {type(e).__name__}: {e}")
             errors.append("llm")
         # --- code ko sandbox mein chala kar parakho
-        m = PY_BLOCK.search(buf) if buf else None
-        if m:
+        code = find_python(buf) if buf else None
+        if code:
             yield "step", {"msg": "running code in sandbox"}
-            r = await asyncio.to_thread(run_python, m.group(1))
+            try:
+                r = await asyncio.to_thread(run_python, code)
+            except Exception as e:  # noqa: BLE001  sandbox ki apni kharabi ho to bhi jawab poora aaye
+                chat.db.log("error", f"sandbox failed {type(e).__name__}: {e}")
+                r = {"ok": False, "out": "", "err": f"sandbox unavailable ({type(e).__name__})", "blocked": True}
             if not r["ok"] and fast_llm_available() and not r["blocked"]:
                 yield "step", {"msg": "code failed, fixing once"}
                 fix = msgs + [{"role": "assistant", "content": buf[:1500]},
@@ -207,11 +226,11 @@ async def run(chat: Any, text: str, history: list[dict] | None, prev_user: str |
                         fixed += tok
                 except Exception:  # noqa: BLE001
                     fixed = ""
-                m2 = PY_BLOCK.search(fixed)
-                if m2:
-                    r2 = await asyncio.to_thread(run_python, m2.group(1))
+                fixed_code = find_python(fixed)
+                if fixed_code:
+                    r2 = await asyncio.to_thread(run_python, fixed_code)
                     if r2["ok"]:
-                        note = "\n\n**Corrected code (the first version failed):**\n```python\n" + m2.group(1).strip() + "\n```"
+                        note = "\n\n**Corrected code (the first version failed):**\n```python\n" + fixed_code + "\n```"
                         buf += note
                         yield "token", note
                         r = r2
@@ -234,5 +253,5 @@ async def run(chat: Any, text: str, history: list[dict] | None, prev_user: str |
         buf = "\n\n".join(lines) or tr("error", text)
         yield "token", buf
     yield "done", {"mode": "agent", "agent": {"plan": plan, "errors": errors, "verified": verified, "by": answered_by,
-                   "tokens": {"prompt": p_tok, "completion": c_tok}, "tool_ms": round((time.time() - t0) * 1000)},
+                   "tokens": {"prompt": p_tok, "completion": c_tok}, "sandbox_err": (locals().get("r") or {}).get("err", "")[:120], "tool_ms": round((time.time() - t0) * 1000)},
                    "sources": sources}

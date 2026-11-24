@@ -52,11 +52,11 @@ CHECKS = [  # (sawal, jawab mein yeh number hona chahiye)
  ("Write a python program that computes the sum of all primes below 1000 and print it.", "76127"),
  ("Write python code to compute the 25th Fibonacci number (F1=F2=1) and print it.", "75025"),
  ("Compute 15 factorial using python and print the result.", "1307674368000"),
- ("Write a python script that counts how many numbers below 500 are divisible by 3 or 5 and print the count.", "233"),
+ ("Write a python script that counts how many integers from 1 to 499 inclusive are divisible by 3 or 5 and print the count.", "232"),
  ("Use python to compute the sum of digits of 2**100 and print it.", "115"),
  ("Write python to find the greatest common divisor of 1071 and 462 and print it.", "21"),
  ("What is (123*47)+(89*12) ? Also give today's date.", "6849"),
- ("Write python that reverses the string 'talashly' and prints it.", "yhsalat"),
+ ("Write python that reverses the string 'talashly' and prints it.", "ylhsalat"),
 ]
 HARDQ = [c[0] for c in CHECKS]
 EXPECT = dict(CHECKS)
@@ -116,7 +116,7 @@ def ask(i, j):
     elif not issue and mode in ("extractive", "none"):
         issue = "no-llm-fallback"
     with lock:
-        res.append({"i": i, "j": j, "model": model, "q": q[:60], "total": time.time() - t0, "first": first, "mode": mode, "issue": issue, "len": len(text), "head": text[:70].replace("\n", " ")})
+        res.append({"i": i, "j": j, "model": model, "q": q[:60], "total": time.time() - t0, "first": first, "mode": mode, "issue": issue, "len": len(text), "head": text[:50].replace("\n", " ") + " ... " + text[-130:].replace("\n", " ")})
 
 
 def user(i):

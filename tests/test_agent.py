@@ -112,3 +112,22 @@ def test_agent_model_listed(tmp_path):
     with TestClient(app) as c:
         ids = [m["id"] for m in c.get("/api/models").json()["models"]] if "models" in c.get("/api/models").json() else []
     assert "mus-7.01-agent" in ids or ids == []
+
+
+def test_find_python_tolerates_missing_fence_and_language():
+    f = agent_mod.find_python
+    assert f("```python\nprint(1)\n```") == "print(1)"
+    assert f("text\n```\nprint(2)\n```") == "print(2)"
+    assert f("```python\nprint(3)") == "print(3)"      # band na hone wala fence
+    assert f("```text\nhello world\n```") is None          # python nahi
+    assert f("no code here") is None
+
+
+def test_agent_survives_unclosed_code_fence(tmp_path, monkeypatch):
+    calls = []
+    _fake(monkeypatch, calls, ["```python\nprint('talashly'[::-1])"])
+    cfg, app = build(tmp_path)
+    _cfg_llm(cfg)
+    with TestClient(app) as c:
+        evs = chat(c, "write python that reverses the string talashly and prints it", model="mus-7.01-agent")[1]
+    assert "ylhsalat" in "".join(ev(evs, "token"))

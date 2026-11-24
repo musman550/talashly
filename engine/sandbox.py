@@ -80,6 +80,8 @@ def run_python(code: str, timeout: float = 4.0) -> dict:
                                capture_output=True, timeout=timeout, cwd=td, env={"PYTHONHASHSEED": "0"}, preexec_fn=limits)
         except subprocess.TimeoutExpired:
             return {"ok": False, "out": "", "err": f"timed out after {timeout:.0f}s", "blocked": False}
+        except Exception as e:  # noqa: BLE001  (preexec/fork/limits ki dikkat)
+            return {"ok": False, "out": "", "err": f"sandbox error {type(e).__name__}: {e}"[:200], "blocked": True}
     err = p.stderr.strip().splitlines()[-1] if p.stderr.strip() else ""
     if p.returncode < 0 and not err:
         err = "stopped: CPU/time limit"

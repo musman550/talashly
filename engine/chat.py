@@ -489,13 +489,20 @@ class Chat:
                 done = {"mode": "chat" if verdict is None else verdict, "model": model.id}
             else:
                 smart_done = None
-                async for ev, data in self._smart(text, history, prev_user, model):
-                    if ev == "done":
-                        smart_done = data
-                        continue
-                    if ev == "token":
-                        buf += data
-                    yield ev, data
+                try:
+                    async for ev, data in self._smart(text, history, prev_user, model):
+                        if ev == "done":
+                            smart_done = data
+                            continue
+                        if ev == "token":
+                            buf += data
+                        yield ev, data
+                except Exception as e:  # noqa: BLE001  koi bhi bug ho: stream adhoora na kate, saaf jawab + log
+                    self.db.log("error", f"smart failed {type(e).__name__}: {e}")
+                    msg = tr("error", text)
+                    buf = (buf + "\n\n" if buf else "") + msg
+                    yield "token", ("\n\n" if buf != msg else "") + msg
+                    smart_done = {"mode": "error"}
                 if smart_done is not None:
                     done = dict(smart_done)
                     done["model"] = model.id
