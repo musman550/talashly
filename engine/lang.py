@@ -79,6 +79,10 @@ MSG: dict[str, dict[str, str]] = {
         "en": "Many people are asking right now. You are number {n} in line (about {s} s). Your answer will start automatically.",
         "roman": "Abhi bohat log pooch rahe hain. Aap ka number {n} hai (taqreeban {s} second). Jawab khud shuru ho jayega.",
         "ur": "ابھی بہت لوگ پوچھ رہے ہیں۔ آپ کا نمبر {n} ہے (تقریباً {s} سیکنڈ)۔ جواب خود شروع ہو جائے گا۔"},
+    "agent_nollm": {
+        "en": "(The AI writer is busy right now, so this is the tools-only answer. Ask again in a minute for the full answer with code.)",
+        "roman": "(AI likhne wala abhi masroof hai, is liye ye sirf tools ka jawab hai. Poore jawab aur code ke liye ek minute baad dobara poochein.)",
+        "ur": "(اے آئی لکھنے والا ابھی مصروف ہے، اس لیے یہ صرف ٹولز کا جواب ہے۔ مکمل جواب اور کوڈ کے لیے ایک منٹ بعد دوبارہ پوچھیں۔)"},
     "owner_busy": {
         "en": "You already have two answers being prepared. Please wait for one to finish, then ask again.",
         "roman": "Aap ke do jawab pehle se ban rahe hain. Ek khatam hone dein, phir dobara poochein.",

@@ -131,3 +131,11 @@ def test_agent_survives_unclosed_code_fence(tmp_path, monkeypatch):
     with TestClient(app) as c:
         evs = chat(c, "write python that reverses the string talashly and prints it", model="mus-7.01-agent")[1]
     assert "ylhsalat" in "".join(ev(evs, "token"))
+
+
+def test_agent_says_so_when_llm_is_unavailable_for_code(tmp_path):
+    cfg, app = build(tmp_path)
+    with TestClient(app) as c:
+        evs = chat(c, "write a python function that computes the 20th fibonacci number", model="mus-7.01-agent")[1]
+    t = "".join(ev(evs, "token"))
+    assert "busy right now" in t

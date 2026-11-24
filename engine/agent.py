@@ -250,6 +250,8 @@ async def run(chat: Any, text: str, history: list[dict] | None, prev_user: str |
             lines.append(f"{p['title']}: {p['text'][:500]}" if p.get("ok") else f"Could not read the page ({p.get('err')}).")
         if hits:
             lines.append(strip_cites(" ".join(hits[0].passages[:1])[:500]))
+        if "code" in plan or "llm" in errors or not ready:
+            lines.append(tr("agent_nollm", text))
         buf = "\n\n".join(lines) or tr("error", text)
         yield "token", buf
     yield "done", {"mode": "agent", "agent": {"plan": plan, "errors": errors, "verified": verified, "by": answered_by,
