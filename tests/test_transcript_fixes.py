@@ -42,3 +42,11 @@ def test_short_fact_and_explain():
     assert not short_fact("what is the latest news")
     assert not short_fact("what is a bloom filter and how is it used in databases in detail please")
     assert EXPLAIN.search("how to create multi agents")
+
+
+def test_ping_is_light(tmp_path):
+    from fastapi.testclient import TestClient
+    from tests.test_chat import build
+    cfg, app = build(tmp_path)
+    with TestClient(app) as c:
+        assert c.get("/api/ping").json() == {"ok": True}

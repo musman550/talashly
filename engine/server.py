@@ -268,6 +268,10 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
             rss = None
         return {"rss_mb": rss, "peak_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024}
 
+    @app.get("/api/ping")
+    async def ping() -> dict:   # bilkul halka (DB nahi): auto-update ka zinda-hone ka test, bhaari load mein bhi foran
+        return {"ok": True}
+
     @app.get("/api/health")
     async def api_health():
         beat = db.get_stat("heartbeat", 0)
