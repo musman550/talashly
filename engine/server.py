@@ -276,6 +276,8 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
         return {"rss_mb": rss, "peak_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024}
 
     ts_quota = toolsmith.Quota(cfg["toolsmith"])
+    if os.environ.get("TS_LIMITS", "") == "1":
+        cfg["toolsmith"]["limits_enabled"] = True
     if os.environ.get("TS_MAX_USERS", "").isdigit():
         cfg["toolsmith"]["free_users_per_day"] = int(os.environ["TS_MAX_USERS"])
     if os.environ.get("TS_REQS", "").isdigit():

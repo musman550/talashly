@@ -27,7 +27,7 @@ DEFAULTS: dict[str, Any] = {
              "max_msgs_per_conv": 400, "anon_rate_per_min": 20, "key_rate_per_min": 60, "daily_quota_anon": 200,
              "daily_quota_key": 5000, "signup_enabled": True, "signup_per_hour_per_ip": 5, "private_default": True},
     # toolsmith: website ka "Get my plans" / sidebar AI. Free quota: roz itne users, har user itni requests
-    "toolsmith": {"enabled": True, "free_users_per_day": 10, "requests_per_user": 6, "clients_per_ip": 3, "max_message_chars": 8000},
+    "toolsmith": {"enabled": True, "limits_enabled": False, "free_users_per_day": 10, "requests_per_user": 6, "clients_per_ip": 3, "max_message_chars": 8000},
     "brain": {
         "live_research": True, "live_timeout_s": 12, "live_fetch_max": 6, "weak_coverage": 0.6, "min_coverage": 0.34,
         "auto_expand": True, "expand_votes": 5, "max_domains": 300, "gap_retries": 3,

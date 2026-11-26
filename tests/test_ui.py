@@ -225,3 +225,31 @@ def test_static_pages_render(server, page):
         page.goto(url + path)
         assert page.locator("h1").count() == 1
     assert page.errors == []
+
+
+def test_toolsmith_page_enter_shift_enter_button_no_sidebar(server, page, monkeypatch):
+    from engine import toolsmith as T
+
+    async def fake(msgs, mt, llm_cfg):
+        await asyncio.sleep(0.1)
+        yield "cloudflare", "Done:\n```python\n# file: a.py\nprint('hello from tool')\n```\nRun it."
+    monkeypatch.setattr(T, "_source", fake)
+    url, _ = server
+    page.goto(url + "/toolsmith")
+    assert page.locator(".tsp, .tsb").count() == 0                 # purana side panel nahi
+    page.fill("#q", "line one")
+    page.press("#q", "Shift+Enter")
+    page.type("#q", "line two")
+    assert page.input_value("#q") == "line one\nline two"          # Shift+Enter = nayi line, bheja nahi
+    assert page.locator(".m.u").count() == 0
+    page.press("#q", "Enter")                                       # Enter = send
+    page.wait_for_selector(".m.u", timeout=5000)
+    assert "line one" in page.inner_text(".m.u")                    # bheja hua text foran dikhta hai
+    page.wait_for_selector(".code", timeout=8000)
+    assert "hello from tool" in page.inner_text(".code pre")
+    page.wait_for_selector("a.dl", timeout=8000)
+    page.fill("#q", "second question")
+    page.click("#go")
+    page.wait_for_function("document.querySelectorAll('.m.u').length === 2", timeout=5000)
+    assert page.input_value("#q") == ""
+    assert not page.errors

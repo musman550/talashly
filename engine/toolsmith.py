@@ -42,7 +42,9 @@ class Quota:
             self.day, self.users, self.ips = d, {}, {}
 
     def admit(self, client: str, ip: str) -> tuple[bool, str, int]:
-        """-> (ok, reason, requests_left_after)"""
+        """-> (ok, reason, requests_left_after). limits_enabled=False: koi hadd nahi (-1)."""
+        if not self.cfg.get("limits_enabled", False):
+            return True, "", -1
         self._roll()
         max_u, per_u, per_ip = (int(self.cfg["free_users_per_day"]), int(self.cfg["requests_per_user"]), int(self.cfg["clients_per_ip"]))
         if client not in self.users:

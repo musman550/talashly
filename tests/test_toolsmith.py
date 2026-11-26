@@ -8,7 +8,7 @@ from engine import toolsmith as T
 from tests.test_agent import build, chat  # noqa: F401
 from tests.test_chat import ev
 
-CFG = {"free_users_per_day": 2, "requests_per_user": 2, "clients_per_ip": 2}
+CFG = {"limits_enabled": True, "free_users_per_day": 2, "requests_per_user": 2, "clients_per_ip": 2}
 
 
 def test_quota_limits():
@@ -56,7 +56,7 @@ def test_endpoint_builds_zip_with_fake_llm(tmp_path, monkeypatch):
         dl = [d for n, d in evs if n == "download"][0]
         z = zipfile.ZipFile(io.BytesIO(c.get(dl["url"]).content))
         assert any(n.endswith("tool.py") for n in z.namelist())
-        assert c.get("/api/toolsmith/quota").json()["users_today"] >= 1
+        assert "users_today" in c.get("/api/toolsmith/quota").json()
         assert c.get("/toolsmith").status_code == 200 and c.get("/static/toolsmith.js").status_code == 200 and c.get("/static/toolsmith.css").status_code == 200
 
 
@@ -69,6 +69,7 @@ def test_endpoint_quota_exhausted_and_plan_mode(tmp_path, monkeypatch):
     monkeypatch.setattr(T, "_source", fake)
     cfg, app = build(tmp_path)
     cfg["toolsmith"]["requests_per_user"] = 1
+    cfg["toolsmith"]["limits_enabled"] = True
     with TestClient(app) as c:
         h = {"X-Client-Id": "zzzzzzzzzzzzzzzz9999"}
         r = c.post("/api/toolsmith", json={"message": "plan please", "mode": "plan"}, headers=h)
@@ -123,3 +124,16 @@ def test_toolsmith_assets_not_cached_and_page_versioned(tmp_path):
         assert c.get("/static/toolsmith.js").headers["cache-control"] == "no-cache"
         assert "toolsmith.js?v=" in c.get("/toolsmith").text
         assert "last_error" in c.get("/api/mesh/status").text
+
+
+def test_limits_off_by_default(tmp_path, monkeypatch):
+    async def fake(msgs, mt, llm_cfg):
+        yield "cloudflare", "ok " * 20
+    monkeypatch.setattr(T, "_source", fake)
+    cfg, app = build(tmp_path)
+    assert cfg["toolsmith"]["limits_enabled"] is False
+    with TestClient(app) as c:
+        h = {"X-Client-Id": "llllllllllllllll0000"}
+        for _ in range(12):
+            r = c.post("/api/toolsmith", json={"message": "hello there"}, headers=h)
+            assert "user_limit" not in r.text and "event: done" in r.text

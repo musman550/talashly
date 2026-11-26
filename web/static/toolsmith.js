@@ -33,7 +33,7 @@
           var ev = (blk.match(/^event: (.*)$/m) || [])[1], dt = (blk.match(/^data: (.*)$/m) || [])[1], d; try { d = JSON.parse(dt); } catch (x) { return; }
           if (ev === "token") { text += d; render(b, text); window.scrollTo(0, document.body.scrollHeight); }
           else if (ev === "step") { note.textContent = d.msg; }
-          else if (ev === "meta") { note.textContent = "Aaj ki free requests baqi: " + d.left_today; }
+          else if (ev === "meta") { note.textContent = d.left_today >= 0 ? "Aaj ki free requests baqi: " + d.left_today : ""; }
           else if (ev === "check") { note.textContent = d.lines.join(" | "); }
           else if (ev === "download" && /^\/api\/dl\/[\w-]+$/.test(d.url)) { dl = d; }
           else if (ev === "error") { text = d.message || "Error"; b.textContent = text; }
