@@ -23,6 +23,8 @@ SYSTEM = (
     "refuse only clearly harmful tools (malware, credential theft, spam, stalking). /no_think")
 PLAN_NOTE = (" MODE=PLAN: do not write full code. Produce a clear service plan: what the tool does, features, steps, tech stack, "
              "time estimate, and what the client must provide. End with 'Say \"build it\" and I will write the code.'")
+CHAT_SYSTEM = ("You are Talashly Pro, a fast, accurate and professional assistant. Reply in the user's language (Roman Urdu if they write Roman Urdu; "
+               "keep technical terms and code in English). Be concise and complete; for code give one complete fenced block. If unsure, say so. /no_think")
 EXT = {"python": "py", "py": "py", "javascript": "js", "js": "js", "html": "html", "bash": "sh", "sh": "sh", "json": "json",
        "css": "css", "sql": "sql", "typescript": "ts", "txt": "txt"}
 FENCE = re.compile(r"```([\w+-]*)\n(.*?)```", re.S)
@@ -133,7 +135,7 @@ async def run(cfg: dict, quota: Quota, llm_cfg: dict, client: str, ip: str, mess
     if not ok:
         yield "error", {"code": why, "message": MSG[why]}
         return
-    msgs = [{"role": "system", "content": SYSTEM + (PLAN_NOTE if mode == "plan" else "")}]
+    msgs = [{"role": "system", "content": CHAT_SYSTEM if mode == "chat" else SYSTEM + (PLAN_NOTE if mode == "plan" else "")}]
     for h in (history or [])[-6:]:
         if h.get("role") in ("user", "assistant") and h.get("content"):
             msgs.append({"role": h["role"], "content": str(h["content"])[:3000]})
@@ -141,7 +143,7 @@ async def run(cfg: dict, quota: Quota, llm_cfg: dict, client: str, ip: str, mess
     yield "meta", {"left_today": left, "mode": mode}
     text, src = "", ""
     try:
-        async for src, tok in _source(msgs, 700 if mode == "plan" else 1800, llm_cfg):
+        async for src, tok in _source(msgs, 700 if mode == "plan" else 1200 if mode == "chat" else 1800, llm_cfg):
             text += tok
             yield "token", tok
     except Exception as e:  # noqa: BLE001
@@ -149,7 +151,7 @@ async def run(cfg: dict, quota: Quota, llm_cfg: dict, client: str, ip: str, mess
             yield "error", {"code": "busy", "message": "AI abhi masroof hai, thori der baad dobara try karein."}
             return
         yield "token", "\n\n(Jawab beech mein ruk gaya; dobara poochein.)"
-    files = extract_files(text) if mode != "plan" else {}
+    files = extract_files(text) if mode == "build" else {}
     if files:
         rep = syntax_report(files)
         if rep:

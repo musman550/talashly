@@ -17,13 +17,13 @@
   document.head.appendChild(css);
   var btn = el("button", "tsb", "✨ Get my plan"), p = el("aside", "tsp"), list = el("div", "tsl"), note = el("div", "tsn", "");
   p.setAttribute("aria-label", "Talashly Toolsmith");
-  var h = el("div", "tsh"), mp = el("button", "", "Plan"), mb = el("button", "", "Build code"), x = el("button", "", "✕");
-  h.append(el("b", "", "Talashly Toolsmith"), mp, mb, x);
+  var h = el("div", "tsh"), mp = el("button", "", "Plan"), mb = el("button", "", "Build code"), mc = el("button", "", "Chat"), x = el("button", "", "✕");
+  h.append(el("b", "", "Talashly Pro"), mp, mb, mc, x);
   var f = el("div", "tsf"), ta = el("textarea"), go = el("button", "", "Send"); ta.placeholder = "Kaunsa tool/service chahiye? (Roman Urdu / English)"; ta.maxLength = 4000;
   f.append(ta, go); p.append(h, list, note, f); document.body.append(btn, p);
-  function setMode(m) { S.mode = m; mp.className = m === "plan" ? "on" : ""; mb.className = m === "build" ? "on" : ""; }
+  function setMode(m) { S.mode = m; mp.className = m === "plan" ? "on" : ""; mb.className = m === "build" ? "on" : ""; mc.className = m === "chat" ? "on" : ""; }
   function open(m, text) { if (m) setMode(m); p.classList.add("o"); if (text) { ta.value = text; } ta.focus(); }
-  mp.onclick = function () { setMode("plan"); }; mb.onclick = function () { setMode("build"); }; btn.onclick = function () { open(); }; x.onclick = function () { p.classList.remove("o"); };
+  mp.onclick = function () { setMode("plan"); }; mb.onclick = function () { setMode("build"); }; mc.onclick = function () { setMode("chat"); }; btn.onclick = function () { open(); }; x.onclick = function () { p.classList.remove("o"); };
   setMode(S.mode); if (me && me.dataset.open === "1") open();
   function render(box, text) {
     box.textContent = ""; text.split("```").forEach(function (part, i) {

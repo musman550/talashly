@@ -76,3 +76,16 @@ def test_endpoint_quota_exhausted_and_plan_mode(tmp_path, monkeypatch):
         r2 = c.post("/api/toolsmith", json={"message": "again", "mode": "plan"}, headers=h)
         assert "user_limit" in r2.text
         assert c.post("/api/toolsmith", json={"message": "x", "mode": "hack"}, headers=h).status_code == 422
+
+
+def test_chat_mode_no_zip(tmp_path, monkeypatch):
+    seen = {}
+
+    async def fake(msgs, mt, llm_cfg):
+        seen["sys"] = msgs[0]["content"]
+        yield "cloudflare", "Sure:\n```python\nprint('this is long enough to count')\n```"
+    monkeypatch.setattr(T, "_source", fake)
+    cfg, app = build(tmp_path)
+    with TestClient(app) as c:
+        r = c.post("/api/toolsmith", json={"message": "hello", "mode": "chat"}, headers={"X-Client-Id": "qqqqqqqqqqqqqqqq7777"})
+        assert "Talashly Pro" in seen["sys"] and "event: download" not in r.text and '"source": "cloudflare"' in r.text

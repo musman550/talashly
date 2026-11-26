@@ -101,7 +101,7 @@ class CodeIn(BaseModel):
 
 class ToolIn(BaseModel):
     message: str = Field(min_length=1, max_length=20000)
-    mode: str = Field(default="build", pattern="^(build|plan)$")
+    mode: str = Field(default="build", pattern="^(build|plan|chat)$")
     history: list[HistMsg] | None = Field(default=None, max_length=12)
 
 
