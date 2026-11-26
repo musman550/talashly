@@ -586,3 +586,35 @@ def test_lanes_route_hard_jobs_to_quality_and_light_jobs_to_fast():
     assert needs_quality([sysm, {"role": "user", "content": "mujhe python seekhna hai"}], 450)
     assert needs_quality([sysm, {"role": "user", "content": "mujy video bot bna do"}], 450)   # Roman Urdu
     assert needs_quality([sysm, {"role": "user", "content": "explain gravity"}], 1000)
+
+
+def test_cloudflare_overflow_lane(monkeypatch):
+    import asyncio
+    from engine import mesh as M
+    monkeypatch.delenv("CF_ACCOUNT_ID", raising=False)
+    assert M.cf_cfg() is None and not M.cf_available()
+    monkeypatch.setenv("CF_ACCOUNT_ID", "abc123")
+    monkeypatch.setenv("CF_API_TOKEN", "tok")
+    monkeypatch.setenv("CF_MAX_PER_DAY", "2")
+    c = M.cf_cfg()
+    assert c["base_url"].endswith("/accounts/abc123/ai/v1") and c["path"] == "/chat/completions" and "gemma" in c["model"]
+    monkeypatch.setenv("CF_ACCOUNT_ID", "bad/../id")
+    assert M.cf_cfg() is None
+    monkeypatch.setenv("CF_ACCOUNT_ID", "abc123")
+    mesh = M.Mesh() if hasattr(M, "Mesh") else M.MESH
+    seen = []
+
+    async def fake(self, cfg, messages, mt, temp):
+        seen.append(cfg["model"])
+        yield "hello"
+    monkeypatch.setattr(type(mesh), "_static_stream", fake)
+    monkeypatch.setattr(M, "MESH", mesh)
+
+    async def run():
+        out = []
+        async for t in mesh.stream({"enabled": False}, [{"role": "user", "content": "hi"}], 50, 0.2, True):
+            out.append(t)
+        return out
+    assert asyncio.run(run()) == ["hello"] and seen and mesh.cf_left() == 1
+    asyncio.run(run())
+    assert mesh.cf_left() == 0 and not M.cf_available()

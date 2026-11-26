@@ -201,6 +201,7 @@ class Mesh:
         cpu = [n for n in al if n.tier <= 2]    # hamesha-chalne wala CPU node (GPU sirf kuch ghante)
         s = {"nodes_alive": len(al), "oldest_age_s": max((round(time.time() - n.first_seen) for n in al), default=0),
              "cpu_alive": len(cpu), "cpu_oldest_age_s": max((round(time.time() - n.first_seen) for n in cpu), default=0),
+             "cloudflare": {"on": cf_cfg() is not None, "left_today": max(0, self.cf_left()) if cf_cfg() else 0},
              "pending": len(self.pending), "pulls": self.stats["pulls"],
              "last_pull_age_s": round(time.time() - self.last_pull) if self.last_pull else None,
              "loop_lag_ms_max_60s": max((ms for t, ms in self.lag if time.time() - t < 60), default=None)}
@@ -285,6 +286,12 @@ class Mesh:
         async for t in _stream_chat_raw(cfg, messages, max_tokens, temperature):
             yield t
 
+    def cf_left(self) -> int:
+        day = time.strftime("%Y-%m-%d", time.gmtime())   # Cloudflare ka din 00:00 UTC par reset hota hai
+        if getattr(self, "_cf_day", None) != day:
+            self._cf_day, self._cf_used = day, 0
+        return int(os.environ.get("CF_MAX_PER_DAY", "120")) - self._cf_used
+
     def _free_slot(self) -> bool:
         return any(n.busy + sum(1 for j in self.pending if j.target == n.name and not j.taken.is_set() and not j.cancelled) < n.slots
                    for n in self.nodes.values() if n.alive())
@@ -301,18 +308,28 @@ class Mesh:
                      quality: bool = True) -> AsyncIterator[str]:
         """Sab nodes ko order se aazmata hai. Pehla token aane se pehle ki har galti par agla node;
         token aane ke baad galti ho to upar phenk deta hai (caller ya to 'replace' karta hai ya extractive par girta hai)."""
-        await self._wait_slot()
+        cf = cf_cfg() if cf_available() else None
+        overflow = bool(cf) and self.has_alive() and not self._free_slot()   # nodes bhare: slot ka intezar nahi, seedha Cloudflare
+        if not overflow:
+            await self._wait_slot()
         cands: list[tuple[str, object]] = []
         if cfg.get("enabled"):
             cands.append(("static", cfg))
-        cands += [(f"relay:{n.name}", n) for n in self.alive_relays(quality)]
+        relays = [(f"relay:{n.name}", n) for n in self.alive_relays(quality)]
+        if cf and overflow:
+            cands.append(("cf", cf))
+        cands += relays
+        if cf and not overflow:
+            cands.append(("cf", cf))   # aakhri sahara
         last: Exception | None = None
         for key, node in cands:
             if self._broken(key):
                 continue
             started = False
             try:
-                it = (self._static_stream(node, messages, max_tokens, temperature) if key == "static"
+                if key == "cf":
+                    self._cf_used += 1
+                it = (self._static_stream(node, messages, max_tokens, temperature) if key in ("static", "cf")
                       else self._relay_stream(node, messages, max_tokens, temperature))
                 async for t in it:
                     started = True
@@ -348,6 +365,20 @@ def fast_llm_available() -> bool:
     return any(n.tier >= 3 for n in MESH.alive_relays())
 
 
+def cf_cfg() -> dict | None:
+    """Cloudflare Workers AI (free 10,000 neurons/din, open-source models): sirf tab jab owner ne CF_ACCOUNT_ID + CF_API_TOKEN set kiye.
+    Ye overflow lane hai: Kaggle nodes bhare hon to lambe jawab yahan; roz ki hadd (CF_MAX_PER_DAY, default 120) guard hai."""
+    acct, tok = os.environ.get("CF_ACCOUNT_ID", "").strip(), os.environ.get("CF_API_TOKEN", "").strip()
+    if not (acct.isalnum() and tok):
+        return None
+    return {"enabled": True, "base_url": f"https://api.cloudflare.com/client/v4/accounts/{acct}/ai/v1", "path": "/chat/completions",
+            "api_key": tok, "model": os.environ.get("CF_MODEL", "@cf/google/gemma-4-26b-a4b-it").strip()}
+
+
+def cf_available() -> bool:
+    return cf_cfg() is not None and MESH.cf_left() > 0 and not MESH._broken("cf")
+
+
 def llm_available(cfg: dict) -> bool:
-    """Kam az kam ek LLM zinda hone ki umeed: static enabled ya koi relay-node abhi pull kar raha hai."""
-    return bool(cfg.get("enabled")) or MESH.has_alive()
+    """Kam az kam ek LLM zinda hone ki umeed: static enabled, relay-node, ya Cloudflare overflow lane."""
+    return bool(cfg.get("enabled")) or MESH.has_alive() or cf_available()
