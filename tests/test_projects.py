@@ -82,3 +82,19 @@ def test_roman_faq():
     M = get_model(None)
     for q in ("tum kya kar sakty ho", "kya ye open source hai", "mujhse roman urdu mein baat karo"):
         assert smalltalk(q, M), q
+
+
+def test_hints_same_language_note_and_load_cap(tmp_path):
+    assert "same language" in extra("Erkläre inflation ausführlich: die Grundidee, ein Beispiel und mehr bitte der die das")
+    assert "same language" in extra("एक छोटे व्यवसाय के लिए योजना बताइए")
+    assert "same language" not in extra("explain recursion")
+    cfg, app = build(tmp_path)
+    ch = app.state.chat if hasattr(app.state, "chat") else None
+    if ch is not None:
+        ch.waiting = 0
+        assert ch._load_cap(700) == 700
+        ch.waiting = 15
+        assert ch._load_cap(700) == 450 and ch._load_cap(4000) == 4000
+        ch.waiting = 50
+        assert ch._load_cap(700) == 300
+        ch.waiting = 0

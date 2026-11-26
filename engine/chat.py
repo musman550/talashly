@@ -386,6 +386,12 @@ class Chat:
         self.active += 1
         return True
 
+    def _load_cap(self, n: int) -> int:
+        """Bheed mein jawab chhote (kam tokens) taake zyada log nipte: queue 10+ -> 450, 40+ -> 300 (website/HTML par nahi)."""
+        if n >= 4000:
+            return n
+        return min(n, 300 if self.waiting >= 40 else 450 if self.waiting >= 10 else n)
+
     def queue_eta(self) -> tuple[int, int]:
         """(aap ka number, andaza second): jab sab slot bhare hon."""
         n = self.waiting + 1
@@ -732,7 +738,8 @@ class Chat:
                 yield "done", {"mode": "needllm"}
             return
         quick = short_fact(text) and not wants_sources(text, model) and not model.deep
-        if not (site or intent(text) == "task" or weak or quick):
+        longq = len(text) >= 90   # lamba/mushkil sawal: index ke tukde jawab nahi dete, LLM likhe
+        if not (site or intent(text) == "task" or weak or quick or longq):
             return
         msgs = [{"role": "system", "content": SYSTEM_PROMPT.replace(" /no_think", "") + hints.extra(text) + " /no_think"}]
         for h in (history or [])[-6:] if (edit or _follow_up(text)) else []:
@@ -741,7 +748,7 @@ class Chat:
         msgs.append({"role": "user", "content": text})
         got = False
         try:
-            async for tok in stream_chat(llm, msgs, max_tokens=(4000 if (site or CREATIVE.search(text) or "html" in text.lower())
+            async for tok in stream_chat(llm, msgs, max_tokens=self._load_cap(4000 if (site or CREATIVE.search(text) or "html" in text.lower())
                                                                      else 1000 if EXPLAIN.search(text) else 700)):
                 got = True
                 yield "token", tok

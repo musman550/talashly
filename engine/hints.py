@@ -22,13 +22,19 @@ def lib_hints(text: str) -> str:
     return (" Library facts (follow them): " + " ".join(out)) if out else ""
 
 
+_FR_ES_DE = re.compile(r"\b(le|la|les|des|une|est|pour|dans|el|los|las|una|para|con|der|die|das|und|nicht|ein|eine|mit|ist)\b", re.I)
+
+
 def lang_note(text: str) -> str:
     lang = reply_lang(text)
+    nonascii = sum(ord(c) > 127 for c in text)
     if lang == "roman":
         return (" The user writes Roman Urdu (Urdu in Latin letters, mixed with English words). Understand it as Urdu, "
                 "reply in simple Roman Urdu, keep technical terms and code in English. If you truly cannot understand, ask one short question in Roman Urdu; never invent an answer.")
     if lang == "ur":
         return " The user writes Urdu: reply in simple Urdu script, keep code and technical terms in English."
+    if nonascii > max(3, len(text) * .25) or len(_FR_ES_DE.findall(text)) >= 3:
+        return " Reply in exactly the same language and script as the user's message, even for technical terms; never switch to English."
     return ""
 
 
