@@ -115,3 +115,11 @@ def test_auto_continue_when_cut_off(tmp_path, monkeypatch):
         r = c.post("/api/toolsmith", json={"message": "make a one page html shop " * 3}, headers={"X-Client-Id": "cccccccccccccccc5555"})
     assert len(calls) == 2 and "event: step" in r.text and "event: download" in r.text
     assert "</html>" in r.text and r.text.count("```html") == 1   # dobara khola fence hata diya gaya
+
+
+def test_toolsmith_assets_not_cached_and_page_versioned(tmp_path):
+    cfg, app = build(tmp_path)
+    with TestClient(app) as c:
+        assert c.get("/static/toolsmith.js").headers["cache-control"] == "no-cache"
+        assert "toolsmith.js?v=" in c.get("/toolsmith").text
+        assert "last_error" in c.get("/api/mesh/status").text

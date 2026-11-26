@@ -201,7 +201,8 @@ class Mesh:
         cpu = [n for n in al if n.tier <= 2]    # hamesha-chalne wala CPU node (GPU sirf kuch ghante)
         s = {"nodes_alive": len(al), "oldest_age_s": max((round(time.time() - n.first_seen) for n in al), default=0),
              "cpu_alive": len(cpu), "cpu_oldest_age_s": max((round(time.time() - n.first_seen) for n in cpu), default=0),
-             "cloudflare": {"on": cf_cfg() is not None, "left_today": max(0, self.cf_left()) if cf_cfg() else 0},
+             "cloudflare": {"on": cf_cfg() is not None, "left_today": max(0, self.cf_left()) if cf_cfg() else 0,
+                            "last_error": getattr(self, "cf_last", "")},
              "pending": len(self.pending), "pulls": self.stats["pulls"],
              "last_pull_age_s": round(time.time() - self.last_pull) if self.last_pull else None,
              "loop_lag_ms_max_60s": max((ms for t, ms in self.lag if time.time() - t < 60), default=None)}

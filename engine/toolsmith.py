@@ -128,6 +128,7 @@ async def _source(messages: list[dict], max_tokens: int, llm_cfg: dict) -> Async
             return
         except Exception as e:  # noqa: BLE001
             MESH._fail("cf")
+            MESH.cf_last = f"{type(e).__name__}: {e}"[:200]
             if started:
                 raise
     async for t in stream_chat(llm_cfg, messages, max_tokens=max_tokens, temperature=0.3):

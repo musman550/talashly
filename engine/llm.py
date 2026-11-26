@@ -72,7 +72,8 @@ async def _stream_chat_raw(c: dict, messages: list[dict], max_tokens: int = 1500
     async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as cl:
         async with cl.stream("POST", url, json=payload, headers=headers) as r:
             if r.status_code != 200:
-                raise RuntimeError(f"llm http {r.status_code}")
+                body = (await r.aread()).decode("utf8", "replace")[:160].replace("\n", " ")
+                raise RuntimeError(f"llm http {r.status_code}: {body}")
             async for line in r.aiter_lines():
                 if not line.startswith("data:"):
                     continue

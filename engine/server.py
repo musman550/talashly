@@ -599,7 +599,9 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     async def security_headers(request: Request, call_next):
         resp = await call_next(request)
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-        if request.url.path.startswith("/static/"):  # CDN/browser cache: page tezi se khulta hai (Micro VM par load kam)
+        if request.url.path.startswith("/static/toolsmith"):   # naya JS/CSS foran: purani cache se page toot jata tha
+            resp.headers["Cache-Control"] = "no-cache"
+        elif request.url.path.startswith("/static/"):  # CDN/browser cache: page tezi se khulta hai (Micro VM par load kam)
             resp.headers["Cache-Control"] = "public, max-age=3600, s-maxage=86400"
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         if "text/html" in resp.headers.get("content-type", ""):
