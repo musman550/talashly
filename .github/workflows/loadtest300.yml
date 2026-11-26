@@ -1,0 +1,17 @@
+name: loadtest300
+on:
+  workflow_dispatch:
+    inputs:
+      users: {description: "Users (har ek 5 sawal, 5 zabanen)", default: "300"}
+      ramp: {description: "Ramp seconds", default: "900"}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with: {sparse-checkout: deploy}
+      - run: python3 deploy/loadtest5.py "http://137.23.39.13:8000" "${{ inputs.users }}" "${{ inputs.ramp }}" | tee /tmp/out.txt
+      - if: always()
+        run: |
+          { echo '```'; cat /tmp/out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
