@@ -268,6 +268,16 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
             rss = None
         return {"rss_mb": rss, "peak_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024}
 
+    @app.get("/api/dl/{token}")
+    async def api_dl(token: str):
+        from . import projects
+        got = projects.get(token)
+        if not got:
+            raise HTTPException(404, "Link expired or not found. Ask again to get a fresh one.")
+        data, name = got
+        return Response(data, media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
+
     @app.get("/api/ping")
     async def ping() -> dict:   # bilkul halka (DB nahi): auto-update ka zinda-hone ka test, bhaari load mein bhi foran
         return {"ok": True}

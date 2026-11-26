@@ -8,7 +8,10 @@ ROMAN_MARKERS = {"assalam", "assalamualaikum", "alaikum", "walaikum", "aoa", "ky
                  "kaise", "kese", "kaisa", "salam", "salaam", "shukriya", "shukria", "mujhe", "mujy", "nahi", "nahin",
                  "haan", "kaun", "kon", "btao", "batao", "bataiye", "khuda", "allah", "hafiz", "yar", "yaar", "bhai",
                  "janab", "karo", "karna", "sakte", "sakta", "naam", "mera", "meri", "apna", "kia", "kaam",
-                 "kaisay", "kyun", "kyon", "iska", "uska", "mein", "main", "wala", "wali"}  # "hy"/"he" jaan-boojh kar nahi (hy = hi bhi hota hai)
+                 "kaisay", "kyun", "kyon", "iska", "uska", "mein", "main", "wala", "wali",
+                 "kro", "bna", "bnao", "dy", "skty", "sakty", "mujy", "mjy", "kasy", "kaisy", "krna", "kiya", "kyu", "chahiye", "chahye",
+                 "hn", "krty", "wo", "yeh", "aur", "bhi", "kuch", "koi", "abhi", "aaj", "seekh", "batayen", "smj", "nhi", "acha", "thk",
+                 "bohat", "buht", "zyada", "pehle", "phir", "baad", "lekin", "magar", "agar", "toh", "zuban", "baat", "ap", "han"}  # "hy"/"he" jaan-boojh kar nahi (hy = hi bhi hota hai)
 
 
 def reply_lang(text: str) -> str:

@@ -142,6 +142,7 @@ def start_server(server: str, model: str, gpu: bool):
 
 
 def bring_up():
+    global SLOTS
     if has_gpu():
         for url in GPU_MODELS:   # sab se bara pehle; na chale (download/memory) to agla chhota
             try:
@@ -155,13 +156,20 @@ def bring_up():
             except Exception as e:  # noqa: BLE001
                 log("ye GPU model nahi chala, agla:", str(e)[:300])
         log("GPU raasta fail, CPU par girte hain")
+    if NAME.endswith("-b"):   # "quality lane": bada Qwen3-4B (30 GB RAM mein aaram se) mushkil/Roman-Urdu/code kaam ke liye
+        try:
+            log("quality lane: Qwen3-4B")
+            SLOTS = 2   # bada model: kam slot, har ek ko zyada CPU
+            return start_server(install_llama("cpu"), get_model([CPU_MODELS[2]]), False), "cpuq"
+        except Exception as e:  # noqa: BLE001
+            log("4B nahi chala, 1.7B par:", str(e)[:200])
     return start_server(install_llama("cpu"), get_model(CPU_MODELS), False), "cpu"
 
 
 async def serve(proc, kind):
     from engine.relaynode import RelayWorker
     w = RelayWorker(SITE, SECRET, "http://127.0.0.1:8081", name=NAME, model="qwen3", slots=SLOTS,
-                    max_runtime_s=max(60.0, HOURS * 3600 - (time.time() - T0)), log=log, tier=3 if kind == "gpu" else 1)
+                    max_runtime_s=max(60.0, HOURS * 3600 - (time.time() - T0)), log=log, tier=3 if kind == "gpu" else 2 if kind == "cpuq" else 1)
 
     async def watchdog():   # llama mar jaye to notebook khatam: guard naya chala dega
         while w.should_run():
@@ -243,7 +251,7 @@ def main():
     sh(f"git clone --depth 1 https://github.com/musman550/talashly {W}/repo")
     sys.path.insert(0, f"{W}/repo")
     proc, kind = bring_up()
-    if kind == "cpu":
+    if kind in ("cpu", "cpuq"):
         import threading
         threading.Thread(target=renew_thread, daemon=True).start()
     try:

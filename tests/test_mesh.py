@@ -569,3 +569,20 @@ def test_wait_slot_waits_for_free_slot_then_returns():
     dt = asyncio.run(go())
     assert 0.4 < dt < 3
     assert asyncio.run(M.Mesh()._wait_slot()) is None   # koi node nahi: foran
+
+
+def test_lanes_route_hard_jobs_to_quality_and_light_jobs_to_fast():
+    from engine import mesh as M
+    from engine.llm import needs_quality
+    m = M.Mesh()
+    for name, tier in (("fast", 1), ("quality", 2), ("gpu", 3)):
+        n = m.touch(name, "q", slots=2, tier=tier)
+        n.last_seen = time.time()
+    assert [n.name for n in m.alive_relays(True)] == ["gpu", "quality", "fast"]
+    assert [n.name for n in m.alive_relays(False)] == ["fast", "quality", "gpu"]
+    sysm = {"role": "system", "content": "s"}
+    assert not needs_quality([sysm, {"role": "user", "content": "who wrote Hamlet"}], 450)
+    assert needs_quality([sysm, {"role": "user", "content": "write a python function"}], 450)
+    assert needs_quality([sysm, {"role": "user", "content": "mujhe python seekhna hai"}], 450)
+    assert needs_quality([sysm, {"role": "user", "content": "mujy video bot bna do"}], 450)   # Roman Urdu
+    assert needs_quality([sysm, {"role": "user", "content": "explain gravity"}], 1000)

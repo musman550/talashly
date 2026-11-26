@@ -190,7 +190,8 @@ async def run(chat: Any, text: str, history: list[dict] | None, prev_user: str |
     p_tok = c_tok = 0
     verified: bool | None = None
     if ready and (ctx or "code" in plan or not plan):
-        msgs: list[dict] = [{"role": "system", "content": SYSTEM}]
+        from .hints import extra as _extra
+        msgs: list[dict] = [{"role": "system", "content": SYSTEM + _extra(text)}]
         if history and _follow_up(text):
             for h in history[-2:]:
                 msgs.append({"role": h.get("role", "user"), "content": str(h.get("content", ""))[:600]})

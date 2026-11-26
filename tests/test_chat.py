@@ -57,7 +57,7 @@ def ev(evs, name):
     ("Hello!", "Hello|Hi there"), ("hi", "Hello|Hi there"), ("salam", "Assalam|Salam"), ("Assalam o alaikum", "Assalam|Salam"),
     ("السلام علیکم", "السلام"), ("thanks", "welcome|happy to help"), ("shukriya", "Khush|Koi baat"), ("شکریہ", "خوش"),
     ("bye", "Goodbye|Take care"), ("khuda hafiz", "hafiz"), ("how are you?", "AI"), ("kaise ho", "AI"),
-    ("who are you", "AI"), ("tum kaun ho", "AI"), ("آپ کون ہیں", "AI"), ("what can you do", "Deep"),
+    ("who are you", "AI"), ("tum kaun ho", "AI"), ("آپ کون ہیں", "AI"), ("what can you do", "answer questions"),
 ])
 def test_smalltalk_matches(text, lang_word):
     r = smalltalk(text, get_model("mus-7.01"))

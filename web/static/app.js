@@ -179,6 +179,12 @@
       loadConvs(); $("in").focus();
     }
   }
+  function showDl(b) {
+    if (!b.dl || !/^\/api\/dl\/[\w-]+$/.test(b.dl.url)) return;
+    let a = b.body.querySelector("a.dl");
+    if (!a) { a = el("a", "dl", "⬇ Download " + b.dl.name); a.href = b.dl.url; a.setAttribute("download", b.dl.name); a.style.cssText = "display:inline-block;margin:8px 0;padding:9px 16px;border-radius:10px;background:var(--acc,#4f46e5);color:#fff;font-weight:700;text-decoration:none"; }
+    b.body.appendChild(a);
+  }
   function handle(b, name, d, setDone) {
     if (name === "meta") { if (d.conversation_id) S.conv = d.conversation_id; }
     else if (name === "step") b.status.textContent = d.msg;
@@ -188,8 +194,9 @@
     else if (name === "code") showCode(b, d);
     else if (name === "token") { b.text += d; b.status.textContent = ""; render(b.body, b.text, b.sources); scroll(); }
     else if (name === "replace") { b.text = d; render(b.body, b.text, b.sources); }
+    else if (name === "download") { b.dl = d; showDl(b); }
     else if (name === "error") { b.body.appendChild(el("p", "err", d.message || "Error")); }
-    else if (name === "done") { setDone(d); render(b.body, b.text, b.sources); }
+    else if (name === "done") { setDone(d); render(b.body, b.text, b.sources); showDl(b); }
   }
 
   // ---------- conversations

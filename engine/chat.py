@@ -17,6 +17,7 @@ from .db import DB
 from .lang import reply_lang, tr
 from .models import Model, get_model
 from .builder import build_site, wants_site
+from . import hints, projects
 from .llm import stream_chat
 from .mesh import fast_llm_available, llm_available
 from .skills import compare, poem
@@ -44,6 +45,16 @@ PATTERNS: dict[str, re.Pattern] = {
                       r"aap ka naam kya hai|tumhara naam kya hai|your name|what is your name|what'?s your name|"
                       r"which model are you|what model are you|kya aap insan hain|kya tum insan ho|"
                       r"آپ کون ہیں|تم کون ہو|آپ کا نام کیا ہے|आप कौन हैं|तुम कौन हो)$"),
+    "capab": re.compile(r"^(what can you (do|help me with|make|build|create)( for me)?|how can you help( me)?|what are your (skills|features|abilities)|"
+                        r"(ap|aap|tum) (meri|mujhe|mujy|mjy|mere liye) ((kasy|kaise|kese|kaisay) )?(madad|help)( (kasy|kaise|kese|kaisay))?( (kr|kar) (skty|sakte|sakty|sakta))?( (han|hain|ho|hai))?|"
+                        r"(ap|aap|tum) (mujy|mujhe|mjy) kiya (bna|bana) (k |ke )?(dy|de|do) (skty|sakte|sakty)( (han|hain|ho))?|"
+                        r"(ap|aap|tum) kiya kiya (kr|kar) (skty|sakte|sakty) (han|hain|ho)|"
+                        r"(kya |kiya )?(ap|aap|tum|app) (kya|kiya) (kr|kar) (skty|sakte|sakty|sakta) (han|hain|ho))$"),
+    "langreq": re.compile(r"^(mujhse|mujh se|mujhse|mujy|mujhe|mjy) (roman urdu|urdu|hindi|english) (m|mein|me|main) (baat|bat) (karo|kro|kar)$|^(roman urdu|urdu|hindi|punjabi|pashto|pasto|pukhto|arabic|russian|russion|english|french)( zuban| language| lang)?( (m|mein|me|main|mai|mn|mei) (baat|bat|jawab|answer|reply|likho|bolo)( (kro|karo|kar|do|dein|den))?)?$|"
+                        r"^(talk|speak|reply|answer|baat kro|baat karo) (in |to me in )?(roman urdu|urdu|hindi|punjabi|arabic|russian|english|french)$|"
+                        r"^(roman urdu|urdu|hindi|english|russian|russion|arabic|french|pashto|punjabi) (zuban )?(m|mein|me|main) (baat|bat) (kro|karo|kar)$"),
+    "opensrc": re.compile(r"^(kya |kiya )?(ye|yeh|ap|aap|tum|app) (an |ik |ek )?open ?source (ho|hai|hain|han|hy|he)( kya)?$|^(are you|ap|aap|tum) (an |ik |ek )?(open ?source|opensource)( model| ai)?( ho| hain| han)?\??$|^(mean|matlab|mtlb)? ?(that )?(you'?r?e?|you are) (an )?open ?source( model| ai)?$|"
+                          r"^(which|what|konsa|kaun sa) (model|llm|ai) (are you|ho|hain|use (karte|krte) (ho|hain))$"),
     "why": re.compile(r"^(why|should i|why should i|why do i need to|kyun|kyu|kiun) ?(should i |do i need to |i )?(use|choose|pick|try|prefer) (you|talashly|this|mus|tum|aap)( over \w+)?$|^(what makes you (special|different|better)|how are you different( from \w+)?|tum kyun|tumhari khasiyat|aap ki khasiyat)$"),
     "limits": re.compile(r"^(what are your|what'?s your|tell me your|your) (limits?|limitations?|weaknesses|restrictions|rules|policy|policies)$|^(what (can'?t|cannot|can not) you do|what are you not able to do|what do you not do|tum kya nahi kar sakte|aap kya nahi kar sakte)$"),
     "privacy": re.compile(r"^(do you|does talashly|will you|are you) (store|save|keep|log|record|read|storing|saving) (my |our |the )?(chats?|messages?|conversations?|data)( \w+)?$|^(is my (chat|data|conversation) (safe|private|stored|saved))$|^(kya (aap|tum) (meri|mere) (chat|baatein|data) (save|store) karte (ho|hain))$"),
@@ -58,6 +69,22 @@ PATTERNS: dict[str, re.Pattern] = {
 }
 
 REPLIES: dict[str, dict[str, list[str]]] = {
+    "capab": {
+        "en": ["I can: answer questions from my own web index with sources; explain topics in simple words; write and test Python (I run the code in a safe sandbox with the Agent model); "
+               "read a web page you paste; build a ready-to-run project as a ZIP (for example a video-edit bot, a YouTube downloader, a web scraper, a shop website); "
+               "write emails and posts; and chat in many languages. Tell me what you want to make, in one line, and I'll start."],
+        "roman": ["Main yeh kar sakta hoon: apne web index se sources ke saath jawab; topics aasan alfaaz mein samjhana; Python likhna aur (Agent model mein) mehfooz sandbox mein chala kar test karna; "
+                  "aap ka paste kiya URL padhna; tayyar project ZIP mein banana (video-edit bot, YouTube downloader, web scraper, shop website); email/post likhna; aur kai zabanon mein baat. "
+                  "Bas ek line mein bata dein kya banana hai, main shuru kar deta hoon."],
+    },
+    "langreq": {
+        "en": ["I understand Roman Urdu, Urdu, Hindi and many other languages. My small open-source model is strongest in English and weaker in Roman Urdu, so for code and technical questions I give the most accurate answer in English and add a short Roman Urdu summary. Just ask your question in any language."],
+        "roman": ["Main Roman Urdu, Urdu, Hindi aur kai zabanein samajhta hoon. Mera chhota open-source model English mein sab se mazboot hai aur Roman Urdu mein kamzor, is liye code aur technical sawalon ka sab se sahi jawab English mein deta hoon aur saath mein chhota Roman Urdu khulasa. Aap kisi bhi zaban mein sawal poochein."],
+    },
+    "opensrc": {
+        "en": ["Talashly's search engine, index and chat app are my own code. The language model inside is an open-source model (Qwen3, Apache-2.0 licence) that I fine-tune on my own data, and answers cite my own crawled index. It is smaller than the big commercial models, so I may be wrong on hard questions: please check important answers."],
+        "roman": ["Talashly ka search engine, index aur chat app apna code hai. Andar ka language model open-source hai (Qwen3, Apache-2.0 licence) jise main apne data par train karta hoon, aur jawab apne crawl kiye index se aate hain. Ye bade commercial models se chhota hai, is liye mushkil sawalon mein ghalti ho sakti hai: zaroori jawab khud check kar lein."],
+    },
     "why": {
         "en": ["Talashly is a self-owned answer engine: it searches its own index of public web pages, can cite the pages an answer came from, and runs without third-party AI APIs. It also works in many languages and keeps no chat history on the server. It is smaller than the biggest commercial models, so for very hard code or maths treat answers as a strong first draft."],
         "roman": ["Talashly ka apna search index hai, jawab ke sources dikha sakta hai, aur kisi third-party AI API par nahi chalta. Kai zabanon mein kaam karta hai aur server par chat save nahi karta. Sab se bade commercial models se chhota hai, is liye mushkil code ya maths mein jawab ko pehla draft samjhein."],
@@ -197,6 +224,7 @@ def smalltalk(text: str, model: Model) -> str | None:
         return d
     if not t or len(t) > 90 or len(t.split()) > 12:
         return None
+    t = re.sub(r"^(mean kh|mean|matlab|mtlb|ok|okay|ji|acha|phir|to|yar|bhai)\s+", "", t)
     for kind, rx in PATTERNS.items():
         if rx.match(t):
             lang = reply_lang(text)
@@ -405,7 +433,7 @@ class Chat:
 
         # halke kaam (greeting/date/calc/clarify/builder/refuse/commands) slot nahi lete: bhari load mein bhi foran jawab
         cheap = (text.startswith("/") or smalltalk(text, model) is not None or policy_check(text) is not None
-                 or is_unclear(text) or (is_vague(text) and not history and not prev_user) or (wants_site(text) and not fast_llm_available()))
+                 or is_unclear(text) or projects.match(text) is not None or (is_vague(text) and not history and not prev_user) or (wants_site(text) and not fast_llm_available()))
         held = False
         ckey0 = (model.id, qkey(text))
         lead = False
@@ -652,6 +680,12 @@ class Chat:
                 yield "token", hit[0]
                 yield "done", {"mode": hit[1], "cached": True}
                 return
+        proj = projects.build(text)
+        if proj:   # tayyar template: LLM ke baghair, seconds mein asli ZIP
+            yield "token", proj["text"]
+            yield "download", {"url": proj["url"], "name": proj["name"], "size": proj["size"]}
+            yield "done", {"mode": "project"}
+            return
         if model.agent:
             from . import agent
             async for ev, data in agent.run(self, text, history, prev_user, model):
@@ -700,7 +734,7 @@ class Chat:
         quick = short_fact(text) and not wants_sources(text, model) and not model.deep
         if not (site or intent(text) == "task" or weak or quick):
             return
-        msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+        msgs = [{"role": "system", "content": SYSTEM_PROMPT.replace(" /no_think", "") + hints.extra(text) + " /no_think"}]
         for h in (history or [])[-6:] if (edit or _follow_up(text)) else []:
             if h.get("role") in ("user", "assistant") and h.get("content"):
                 msgs.append({"role": h["role"], "content": str(h["content"])[:9000 if (h["role"] == "assistant" and edit) else 1500]})

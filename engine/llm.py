@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import AsyncIterator
 
 import httpx
@@ -42,8 +43,20 @@ async def _strip_think(it: AsyncIterator[str]) -> AsyncIterator[str]:
 async def stream_chat(c: dict, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.5) -> AsyncIterator[str]:
     """Mesh ke zariye: static node + relay nodes (Kaggle...) order se, auto-failover. Koi nahi to NodeError (caller extractive par girta hai)."""
     from .mesh import MESH
-    async for t in _strip_think(MESH.stream(c, messages, max_tokens, temperature)):
+    async for t in _strip_think(MESH.stream(c, messages, max_tokens, temperature, needs_quality(messages, max_tokens))):
         yield t
+
+
+def needs_quality(messages: list[dict], max_tokens: int) -> bool:
+    """Mushkil kaam bade (4B/GPU) lane par: lamba jawab, code, Roman-Urdu/Urdu/Hindi/non-English. Chhote English facts tez 1.7B lane par."""
+    from .lang import reply_lang
+    last = next((str(m.get("content", "")) for m in reversed(messages) if m.get("role") == "user"), "")
+    if max_tokens >= 700 or "```" in last or re.search(r"\b(python|code|script|function|sql|javascript|html|algorithm)\b", last, re.I):
+        return True
+    try:
+        return reply_lang(last.split("QUESTION:")[-1][:400]) != "en"
+    except Exception:  # noqa: BLE001
+        return True
 
 
 async def _stream_chat_raw(c: dict, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.5) -> AsyncIterator[str]:

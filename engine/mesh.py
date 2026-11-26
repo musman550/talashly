@@ -184,19 +184,21 @@ class Mesh:
         return {"ok": True, "cancel": job.cancelled}
 
     # ------------------------------------------------------------ router
-    def alive_relays(self) -> list[RelayNode]:
+    def alive_relays(self, quality: bool = True) -> list[RelayNode]:
+        """quality=True: sab se qabil node pehle (GPU 3 > 4B CPU 2 > 1.7B CPU 1). False (halka kaam): sab se tez/chhota lane pehle,
+        taake bade node mushkil kaam ke liye khali rahein."""
         # pehle jinke slot khali hain; unmein se tez tier (GPU) pehle; phir naapi hui raftar; phir kam bhara hua
         def load(n):   # chal rahe + is node ke liye intezar mein (abhi uthaye nahi gaye)
             return n.busy + sum(1 for j in self.pending if j.target == n.name and not j.taken.is_set() and not j.cancelled)
         return sorted((n for n in self.nodes.values() if n.alive()),
-                      key=lambda n: (load(n) >= n.slots, -n.tier, n.lat_ms or 1e9, load(n) / n.slots))
+                      key=lambda n: (load(n) >= n.slots, -n.tier if quality else n.tier, n.lat_ms or 1e9, load(n) / n.slots))
 
     def has_alive(self) -> bool:
         return bool(self.alive_relays())
 
     def status(self, detail: bool = False) -> dict:
         al = self.alive_relays()
-        cpu = [n for n in al if n.tier <= 1]    # hamesha-chalne wala CPU node (GPU sirf kuch ghante)
+        cpu = [n for n in al if n.tier <= 2]    # hamesha-chalne wala CPU node (GPU sirf kuch ghante)
         s = {"nodes_alive": len(al), "oldest_age_s": max((round(time.time() - n.first_seen) for n in al), default=0),
              "cpu_alive": len(cpu), "cpu_oldest_age_s": max((round(time.time() - n.first_seen) for n in cpu), default=0),
              "pending": len(self.pending), "pulls": self.stats["pulls"],
@@ -295,14 +297,15 @@ class Mesh:
         while time.time() - t0 < SLOT_WAIT_S and self.has_alive() and not self._free_slot():
             await asyncio.sleep(0.2 + (hash(id(asyncio.current_task())) % 100) / 1000)
 
-    async def stream(self, cfg: dict, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.5) -> AsyncIterator[str]:
+    async def stream(self, cfg: dict, messages: list[dict], max_tokens: int = 1500, temperature: float = 0.5,
+                     quality: bool = True) -> AsyncIterator[str]:
         """Sab nodes ko order se aazmata hai. Pehla token aane se pehle ki har galti par agla node;
         token aane ke baad galti ho to upar phenk deta hai (caller ya to 'replace' karta hai ya extractive par girta hai)."""
         await self._wait_slot()
         cands: list[tuple[str, object]] = []
         if cfg.get("enabled"):
             cands.append(("static", cfg))
-        cands += [(f"relay:{n.name}", n) for n in self.alive_relays()]
+        cands += [(f"relay:{n.name}", n) for n in self.alive_relays(quality)]
         last: Exception | None = None
         for key, node in cands:
             if self._broken(key):
