@@ -40,7 +40,7 @@
         });
       }
       if (dl) { var a = el("a", "dl", "⬇ Download " + dl.name); a.href = dl.url; a.download = dl.name; b.appendChild(a); }
-      hist.push({ role: "user", content: msg.slice(0, 3000) }, { role: "assistant", content: text.slice(0, 3000) });
+      hist.push({ role: "user", content: msg.slice(0, 8000) }, { role: "assistant", content: text.slice(0, 12000) });
     } catch (x) { b.textContent = String(x.message || x); }
     busy = false; go.disabled = false; q.focus();
   });

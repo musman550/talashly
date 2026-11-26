@@ -99,10 +99,15 @@ class CodeIn(BaseModel):
     paths: list[str] = Field(min_length=1, max_length=20)
 
 
+class ToolHist(BaseModel):
+    role: str = Field(max_length=12)
+    content: str = Field(max_length=12000)
+
+
 class ToolIn(BaseModel):
     message: str = Field(min_length=1, max_length=20000)
     mode: str = Field(default="build", pattern="^(build|plan|chat)$")
-    history: list[HistMsg] | None = Field(default=None, max_length=12)
+    history: list[ToolHist] | None = Field(default=None, max_length=12)
 
 
 def _sse(name: str, data: Any) -> str:

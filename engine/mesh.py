@@ -291,7 +291,7 @@ class Mesh:
         day = time.strftime("%Y-%m-%d", time.gmtime())   # Cloudflare ka din 00:00 UTC par reset hota hai
         if getattr(self, "_cf_day", None) != day:
             self._cf_day, self._cf_used = day, 0
-        return int(os.environ.get("CF_MAX_PER_DAY", "120")) - self._cf_used
+        return int(os.environ.get("CF_MAX_PER_DAY", "400")) - self._cf_used
 
     def _free_slot(self) -> bool:
         return any(n.busy + sum(1 for j in self.pending if j.target == n.name and not j.taken.is_set() and not j.cancelled) < n.slots

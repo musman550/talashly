@@ -137,6 +137,71 @@ async def _source(messages: list[dict], max_tokens: int, llm_cfg: dict) -> Async
         yield "mesh", t
 
 
+
+HTML_ROUTE = re.compile(r"\b(html|website|web ?site|landing ?page|web ?page|storefront|portfolio)\b", re.I)
+NOT_HTML = re.compile(r"\b(flask|django|fastapi|python|\.py|react|next\.?js|node|express|laravel|php|convert|backend)\b", re.I)
+PART_SYSTEM = (
+    "You are Talashly Code, a senior front-end engineer writing ONE PART of a single-file HTML page. Follow the user's request exactly and keep the same names, "
+    "ids, classes, colours and data across parts. Output RAW code only for the requested part: no markdown fences, no explanations, no placeholders or '...'. "
+    "Use Tailwind CSS via https://cdn.tailwindcss.com and (if interactivity is needed) Alpine.js via https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js with defer. "
+    "Icons: inline SVG or emoji (no icon fonts). Images: https://picsum.photos/seed/KEYWORD/600/600 with an onerror fallback to a gradient block. "
+    "Make it responsive, accessible and visually premium. Implement what the request asks for, nothing less and nothing unrelated. /no_think")
+HTML_PARTS = [
+    ("head", "the <!DOCTYPE html>, <html lang>, the complete <head> (title, meta viewport, CDN scripts, a <style> block) and the opening <body ...> tag. Nothing after <body>."),
+    ("top", "the navigation bar and the hero section only (inside <body>)."),
+    ("main", "all main content sections requested (listings/grids/cards/features/testimonials/forms...) only, with realistic dummy data written out in full."),
+    ("bottom", "the footer and every drawer/modal/overlay the page needs (e.g. cart drawer) only. Do not close body/html."),
+    ("script", "ONE <script> block with ALL the JavaScript logic that the earlier parts need (data, state, render, events, cart/search/filter...), then </body></html>."),
+]
+FENCE_LINE = re.compile(r"^\s*```[\w-]*\s*$", re.M)
+
+
+def part_ok(key: str, text: str) -> bool:
+    low = text.lower()
+    return {"head": "</head>" in low and "<body" in low, "script": "</script>" in low and "</html>" in low}.get(key, len(text.strip()) > 80)
+
+
+async def _sectioned(llm_cfg: dict, message: str, history: list[dict], out: list) -> AsyncIterator[tuple[str, Any]]:
+    """Bari single-file HTML 5 chhote hisson mein: har hissa chhota hone se kabhi katta nahi aur model har hisse par poori tawajjo deta hai."""
+    done = ""
+    ctx = ""
+    for h in history[-2:]:
+        if h.get("role") == "assistant":
+            ctx = "\nPrevious page the user may refer to (edit/convert it if asked):\n" + str(h["content"])[:9000]
+    yield "token", "```html\n"
+    n = len(HTML_PARTS)
+    for i, (key, desc) in enumerate(HTML_PARTS, 1):
+        yield "step", {"msg": f"Part {i}/{n}: {key}"}
+        part = ""
+        for attempt in range(2):
+            prompt = (f"FULL REQUEST:\n{message}\n{ctx}\n\nALREADY WRITTEN (do not repeat it; stay consistent with it):\n{(done if len(done) <= 14000 else done[:5000] + chr(10) + '...' + chr(10) + done[-8000:]) or '(nothing yet)'}\n\n"
+                      f"NOW WRITE ONLY: {desc}\nRaw code only." + (f"\n\nYour previous attempt was cut off. Write this part again, shorter and complete." if attempt else ""))
+            msgs = [{"role": "system", "content": PART_SYSTEM}, {"role": "user", "content": prompt}]
+            part = ""
+            try:
+                async for src, tok in _source(msgs, 2600, llm_cfg):
+                    part += tok
+                out.append(src)
+            except Exception:  # noqa: BLE001
+                if not part:
+                    continue
+            part = re.sub(r"^\s*```[\w-]*[ \t]*\n?", "", part)
+            part = re.sub(r"\n?[ \t]*```\s*$", "", part)
+            part = FENCE_LINE.sub("", part).strip("\n")
+            if part_ok(key, part):
+                break
+        if key == "head" and "file:" not in part[:80]:
+            part = "<!-- file: index.html -->\n" + part
+        if not part.strip():
+            yield "error", {"code": "busy", "message": "AI abhi masroof hai, thori der baad dobara try karein."}
+            out.append("FAILED")
+            return
+        done += part + "\n"
+        yield "token", part + "\n"
+    yield "token", "```\n"
+    out.append("TEXT:" + "```html\n" + done + "```\n")
+
+
 async def run(cfg: dict, quota: Quota, llm_cfg: dict, client: str, ip: str, message: str, history: list[dict] | None,
               mode: str = "build") -> AsyncIterator[tuple[str, Any]]:
     tc = cfg["toolsmith"]
@@ -157,10 +222,29 @@ async def run(cfg: dict, quota: Quota, llm_cfg: dict, client: str, ip: str, mess
     msgs = [{"role": "system", "content": CHAT_SYSTEM if mode == "chat" else SYSTEM + (PLAN_NOTE if mode == "plan" else "")}]
     for h in (history or [])[-6:]:
         if h.get("role") in ("user", "assistant") and h.get("content"):
-            msgs.append({"role": h["role"], "content": str(h["content"])[:3000]})
+            msgs.append({"role": h["role"], "content": str(h["content"])[:12000]})
     msgs.append({"role": "user", "content": message})
     yield "meta", {"left_today": left, "mode": mode}
     text, src = "", ""
+    if mode == "build" and HTML_ROUTE.search(message) and not NOT_HTML.search(message):
+        out: list = []
+        failed = False
+        async for ev, data in _sectioned(llm_cfg, message, history or [], out):
+            if ev == "error":
+                failed = True
+            yield ev, data
+        if failed or "FAILED" in out:
+            return
+        text = next((o[5:] for o in out if isinstance(o, str) and o.startswith("TEXT:")), "")
+        src = next((o for o in out if o in ("cloudflare", "mesh")), "")
+        files = extract_files(text)
+        if files:
+            data = projects.make_zip("tool", {**files, "README.txt": "Generated by Talashly Code. Open index.html in a browser.\n"})
+            token = projects.put("tool.zip", data)
+            if token:
+                yield "download", {"url": f"/api/dl/{token}", "name": "tool.zip", "size": len(data)}
+        yield "done", {"mode": "toolsmith", "source": src or "none", "files": len(files), "parts": len(HTML_PARTS)}
+        return
     cap = 700 if mode == "plan" else 1500 if mode == "chat" else 3500
     cont = 0
     while True:
@@ -191,10 +275,14 @@ async def run(cfg: dict, quota: Quota, llm_cfg: dict, client: str, ip: str, mess
                 yield "error", {"code": "busy", "message": "AI abhi masroof hai, thori der baad dobara try karein."}
                 return
             break
-        if mode == "plan" or cont >= 3 or not incomplete(text):
+        if mode == "plan" or cont >= 5 or not incomplete(text):
             break
         cont += 1
-        yield "step", {"msg": f"Jawab lamba hai, aage likh raha hoon ({cont}/3)..."}
+        yield "step", {"msg": f"Jawab lamba hai, aage likh raha hoon ({cont}/5)..."}
+    if mode != "plan" and incomplete(text):
+        warn = "\n\n(Jawab adhoora reh gaya. \"continue\" likh kar bhejein, main wahin se aage likhunga.)"
+        text += warn
+        yield "token", warn
     files = extract_files(text) if mode == "build" else {}
     if files:
         rep = syntax_report(files)

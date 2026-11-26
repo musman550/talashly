@@ -113,7 +113,7 @@ def test_auto_continue_when_cut_off(tmp_path, monkeypatch):
     monkeypatch.setattr(T, "_source", fake)
     cfg, app = build(tmp_path)
     with TestClient(app) as c:
-        r = c.post("/api/toolsmith", json={"message": "make a one page html shop " * 3}, headers={"X-Client-Id": "cccccccccccccccc5555"})
+        r = c.post("/api/toolsmith", json={"message": "python flask: make a one page html shop " * 3}, headers={"X-Client-Id": "cccccccccccccccc5555"})
     assert len(calls) == 2 and "event: step" in r.text and "event: download" in r.text
     assert "</html>" in r.text and r.text.count("```html") == 1   # dobara khola fence hata diya gaya
 
@@ -137,3 +137,36 @@ def test_limits_off_by_default(tmp_path, monkeypatch):
         for _ in range(12):
             r = c.post("/api/toolsmith", json={"message": "hello there"}, headers=h)
             assert "user_limit" not in r.text and "event: done" in r.text
+
+
+def test_sectioned_html_build_assembles_five_parts(tmp_path, monkeypatch):
+    prompts = []
+    parts = {
+        "head": "```html\n<!DOCTYPE html><html lang=en><head><title>S</title></head><body class=x>```",
+        "NAVIGATION": "<nav id=nav>Shop</nav><section>hero hero hero hero hero hero hero hero hero hero hero hero</section>",
+        "MAIN": "<main id=grid>products products products products products products products products products</main>",
+        "FOOTER": "<footer>footer footer footer footer footer footer footer footer footer footer footer</footer><aside id=cart>cart cart</aside>",
+        "ONE <script>": "<script>document.getElementById('grid');</script></body></html>",
+    }
+
+    async def fake(msgs, mt, llm_cfg):
+        p = msgs[-1]["content"]
+        prompts.append(p)
+        key = "head" if "<!DOCTYPE" in p.split("NOW WRITE ONLY:")[1][:80] else next(k for k in parts if k != "head" and k.lower() in p.split("NOW WRITE ONLY:")[1].lower())
+        yield "cloudflare", parts[key]
+    monkeypatch.setattr(T, "_source", fake)
+    cfg, app = build(tmp_path)
+    with TestClient(app) as c:
+        r = c.post("/api/toolsmith", json={"message": "ik html website bnao shopify store dummy data ke sath"}, headers={"X-Client-Id": "sssssssssssssssss111"})
+    assert len(prompts) == 5 and "Part 5/5" in r.text
+    assert r.text.count("event: download") == 1 and '"parts": 5' in r.text
+    import json as _j
+    toks = "".join(_j.loads(b.split("data: ", 1)[1]) for b in r.text.split("\n\n") if b.startswith("event: token"))
+    assert toks.startswith("```html") and toks.count("```") == 2           # fences ek hi jora, model ke fences hata diye
+    assert "<!-- file: index.html -->" in toks and toks.index("<nav") < toks.index("<main") < toks.index("<footer") < toks.index("<script>")
+    assert "</html>" in toks and "(nothing yet)" in prompts[0] and "<nav" in prompts[2]   # pichle hisse aglay prompt mein
+
+
+def test_python_or_convert_requests_skip_sectioned_route():
+    assert T.HTML_ROUTE.search("ik html website bnao") and not T.NOT_HTML.search("ik html website bnao")
+    assert T.NOT_HTML.search("is html ko flask python mein convert karo")
