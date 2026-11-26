@@ -1,4 +1,16 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Toolsmith - Talashly</title>
-<style>body{font:16px/1.6 system-ui;max-width:640px;margin:10vh auto;padding:0 16px}</style></head>
-<body><h1>Talashly Toolsmith</h1><p>Batayein kaunsa tool ya service chahiye: AI plan banata hai, phir code likh kar ZIP deta hai. Neeche-dayen "Get my plan" dabayein.</p>
-<script src="/static/toolsmith.js" data-open="1"></script></body></html>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Talashly Code</title><meta name="description" content="Describe a tool, website or script. Get complete working code.">
+<link rel="icon" href="/static/icon.svg"><link rel="stylesheet" href="/static/toolsmith.css"></head>
+<body>
+<main id="app">
+  <header><h1>Talashly Code</h1><p id="sub">Batayein kya banana hai: website, script, bot ya tool. Poora chalne wala code milega.</p></header>
+  <div id="list" aria-live="polite"></div>
+</main>
+<form id="form" autocomplete="off">
+  <div class="box"><textarea id="q" rows="1" maxlength="8000" placeholder="Apna prompt likhein (detail jitni zyada, utna behtar)..." aria-label="Prompt"></textarea>
+  <button id="go" type="submit" aria-label="Send">↑</button></div>
+  <div id="note" class="note"></div>
+</form>
+<script src="/static/toolsmith.js"></script>
+</body></html>

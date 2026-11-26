@@ -14,13 +14,13 @@ from .llm import _stream_chat_raw, _strip_think, stream_chat
 from .mesh import cf_available, cf_cfg, MESH
 
 SYSTEM = (
-    "You are Talashly Toolsmith, an expert engineer who builds small working tools for a business's needs. "
-    "Reply in the user's language (Roman Urdu if they write Roman Urdu; keep code and technical terms in English). Be compact: no filler. "
-    "Workflow: (1) one-line understanding of the need; (2) a short numbered plan (max 5 steps); (3) COMPLETE runnable code in fenced blocks "
-    "(Python by default; use real libraries only: requests, beautifulsoup4, flask, fastapi, pandas, openpyxl, yt-dlp, python-telegram-bot...). "
-    "Put the file name as the first comment line of each block, like '# file: app.py'. (4) 3-line how-to-run. "
-    "If the request is too vague to build, ask ONE short question instead. Never invent libraries, never include secrets, "
-    "refuse only clearly harmful tools (malware, credential theft, spam, stalking). /no_think")
+    "You are Talashly Code, a senior engineer. Output the DELIVERABLE directly: never restate, rewrite or summarise the user's request or prompt. "
+    "Follow every instruction and numbered requirement of the user's prompt exactly (stack, libraries, structure, file type, features); if the prompt asks for a "
+    "single-file HTML, give one complete HTML file. Files must be COMPLETE and runnable: no placeholders, no '...', no 'rest of code', never stop mid-file. "
+    "Start each fenced block with its file name as a first-line comment ('# file: app.py', '<!-- file: index.html -->', '// file: app.js'). "
+    "Use real libraries/CDNs only. After the code add at most 3 short lines on how to run. "
+    "Reply in the user's language (Roman Urdu if they write Roman Urdu; code and technical terms in English). "
+    "Ask ONE short question only if the request is impossible to build otherwise. Refuse only clearly harmful tools (malware, credential theft, spam, stalking). /no_think")
 PLAN_NOTE = (" MODE=PLAN: do not write full code. Produce a clear service plan: what the tool does, features, steps, tech stack, "
              "time estimate, and what the client must provide. End with 'Say \"build it\" and I will write the code.'")
 CHAT_SYSTEM = ("You are Talashly Pro, a fast, accurate and professional assistant. Reply in the user's language (Roman Urdu if they write Roman Urdu; "
@@ -78,6 +78,22 @@ def extract_files(text: str) -> dict[str, str]:
             name = f"tool.{ext}" if counts[ext] == 1 else f"tool{counts[ext]}.{ext}"
         files.setdefault(name, body)
     return files
+
+
+def incomplete(text: str) -> bool:
+    """Jawab beech mein kata hua? (khula fence, html bina </html>, python adhoora)"""
+    if text.count("```") % 2 == 1:
+        return True
+    for lang, body in FENCE.findall(text):
+        if lang.lower() == "html" and "<html" in body.lower() and "</html>" not in body.lower():
+            return True
+        if lang.lower() in ("python", "py"):
+            try:
+                ast.parse(body)
+            except SyntaxError as e:
+                if re.search(r"EOF|never closed|unterminated|expected an indented block", str(e)):
+                    return True
+    return False
 
 
 def syntax_report(files: dict[str, str]) -> list[str]:
@@ -142,15 +158,40 @@ async def run(cfg: dict, quota: Quota, llm_cfg: dict, client: str, ip: str, mess
     msgs.append({"role": "user", "content": message})
     yield "meta", {"left_today": left, "mode": mode}
     text, src = "", ""
-    try:
-        async for src, tok in _source(msgs, 700 if mode == "plan" else 1200 if mode == "chat" else 1800, llm_cfg):
-            text += tok
-            yield "token", tok
-    except Exception as e:  # noqa: BLE001
-        if not text:
-            yield "error", {"code": "busy", "message": "AI abhi masroof hai, thori der baad dobara try karein."}
-            return
-        yield "token", "\n\n(Jawab beech mein ruk gaya; dobara poochein.)"
+    cap = 700 if mode == "plan" else 1500 if mode == "chat" else 3500
+    cont = 0
+    while True:
+        was_open = text.count("```") % 2 == 1
+        head, decided = "", not was_open
+        call = msgs if not text else msgs + [
+            {"role": "assistant", "content": text[-14000:]},
+            {"role": "user", "content": "Continue EXACTLY from the last character. Do not repeat anything, do not re-open the code fence if inside a block, do not add commentary. Finish every remaining file completely."}]
+        try:
+            async for src, tok in _source(call, cap, llm_cfg):
+                if not decided:
+                    head += tok
+                    if len(head) < 40 and "\n" not in head:
+                        continue
+                    decided = True
+                    if head.lstrip().startswith("```"):     # model ne fence dobara khola: hata do
+                        head = head.split("\n", 1)[1] if "\n" in head else ""
+                    tok = head
+                    if not tok:
+                        continue
+                text += tok
+                yield "token", tok
+            if not decided and head:
+                text += head
+                yield "token", head
+        except Exception:  # noqa: BLE001
+            if not text:
+                yield "error", {"code": "busy", "message": "AI abhi masroof hai, thori der baad dobara try karein."}
+                return
+            break
+        if mode == "plan" or cont >= 3 or not incomplete(text):
+            break
+        cont += 1
+        yield "step", {"msg": f"Jawab lamba hai, aage likh raha hoon ({cont}/3)..."}
     files = extract_files(text) if mode == "build" else {}
     if files:
         rep = syntax_report(files)
