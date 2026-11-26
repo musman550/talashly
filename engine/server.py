@@ -26,6 +26,7 @@ from .mesh import MESH, load_secret
 from .llm import llm_alive
 from .models import MODELS, get_model
 from .search import Searcher, snippet, terms
+from . import toolsmith
 from .supervisor import Supervisor
 from .users import RateLimiter, authenticate, create_user, ensure_admin
 
@@ -96,6 +97,12 @@ def _msg_text(m: dict) -> str:
 
 class CodeIn(BaseModel):
     paths: list[str] = Field(min_length=1, max_length=20)
+
+
+class ToolIn(BaseModel):
+    message: str = Field(min_length=1, max_length=20000)
+    mode: str = Field(default="build", pattern="^(build|plan)$")
+    history: list[HistMsg] | None = Field(default=None, max_length=12)
 
 
 def _sse(name: str, data: Any) -> str:
@@ -267,6 +274,29 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
         except Exception:  # noqa: BLE001
             rss = None
         return {"rss_mb": rss, "peak_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024}
+
+    ts_quota = toolsmith.Quota(cfg["toolsmith"])
+    if os.environ.get("TS_MAX_USERS", "").isdigit():
+        cfg["toolsmith"]["free_users_per_day"] = int(os.environ["TS_MAX_USERS"])
+    if os.environ.get("TS_REQS", "").isdigit():
+        cfg["toolsmith"]["requests_per_user"] = int(os.environ["TS_REQS"])
+
+    @app.post("/api/toolsmith")
+    async def api_toolsmith(body: ToolIn, request: Request, x_client_id: str = Header(default="")):
+        client = x_client_id if CLIENT_ID.match(x_client_id or "") else "anon"
+        ip = request.client.host if request.client else "?"
+        if not limiter.allow("ts:" + ip, 20):
+            raise HTTPException(429, "Please wait a moment and try again.")
+        hist = [h.model_dump() for h in body.history] if body.history else None
+
+        async def gen():
+            async for ev, data in toolsmith.run(cfg, ts_quota, cfg["llm"], client if client != "anon" else "ip:" + ip, ip, body.message, hist, body.mode):
+                yield _sse(ev, data)
+        return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    @app.get("/api/toolsmith/quota")
+    async def api_toolsmith_quota():
+        return ts_quota.status()
 
     @app.get("/api/dl/{token}")
     async def api_dl(token: str):
@@ -515,6 +545,10 @@ def create_app(cfg: dict | None = None, seeds: list[dict] | None = None, sources
     @app.get("/")
     async def home():
         return page("index.html")
+
+    @app.get("/toolsmith")
+    async def toolsmith_page():
+        return page("toolsmith.html")
 
     @app.get("/about")
     async def about():

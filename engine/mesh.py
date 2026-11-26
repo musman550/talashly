@@ -308,7 +308,7 @@ class Mesh:
                      quality: bool = True) -> AsyncIterator[str]:
         """Sab nodes ko order se aazmata hai. Pehla token aane se pehle ki har galti par agla node;
         token aane ke baad galti ho to upar phenk deta hai (caller ya to 'replace' karta hai ya extractive par girta hai)."""
-        cf = cf_cfg() if cf_available() else None
+        cf = cf_cfg() if (cf_available() and cf_general()) else None
         overflow = bool(cf) and self.has_alive() and not self._free_slot()   # nodes bhare: slot ka intezar nahi, seedha Cloudflare
         if not overflow:
             await self._wait_slot()
@@ -375,10 +375,15 @@ def cf_cfg() -> dict | None:
             "api_key": tok, "model": os.environ.get("CF_MODEL", "@cf/google/gemma-4-26b-a4b-it").strip()}
 
 
+def cf_general() -> bool:
+    """Cloudflare asal Talashly chat mein nahi (wo apni training/Qwen par rehti hai); sirf CF_GENERAL=1 par aam chat mein overflow."""
+    return os.environ.get("CF_GENERAL", "") == "1"
+
+
 def cf_available() -> bool:
     return cf_cfg() is not None and MESH.cf_left() > 0 and not MESH._broken("cf")
 
 
 def llm_available(cfg: dict) -> bool:
     """Kam az kam ek LLM zinda hone ki umeed: static enabled, relay-node, ya Cloudflare overflow lane."""
-    return bool(cfg.get("enabled")) or MESH.has_alive() or cf_available()
+    return bool(cfg.get("enabled")) or MESH.has_alive() or (cf_available() and cf_general())

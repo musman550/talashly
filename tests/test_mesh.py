@@ -596,6 +596,7 @@ def test_cloudflare_overflow_lane(monkeypatch):
     monkeypatch.setenv("CF_ACCOUNT_ID", "abc123")
     monkeypatch.setenv("CF_API_TOKEN", "tok")
     monkeypatch.setenv("CF_MAX_PER_DAY", "2")
+    monkeypatch.setenv("CF_GENERAL", "1")
     c = M.cf_cfg()
     assert c["base_url"].endswith("/accounts/abc123/ai/v1") and c["path"] == "/chat/completions" and "gemma" in c["model"]
     monkeypatch.setenv("CF_ACCOUNT_ID", "bad/../id")
