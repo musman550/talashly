@@ -1,0 +1,13 @@
+name: toolsmith-test
+on: workflow_dispatch
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: {sparse-checkout: deploy}
+      - run: python3 deploy/test_toolsmith.py "http://137.23.39.13:8000" | tee /tmp/out.txt
+      - if: always()
+        run: |
+          { echo '```'; cat /tmp/out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
