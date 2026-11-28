@@ -312,7 +312,7 @@ def qkey(text: str) -> str:
 LEARN_TTL_DAYS = 60      # purane yaad kiye jawab 60 din baad khud hat jate hain (knowledge decay)
 CACHE_TTL_S = 900        # tez jawab: wahi sawal 15 minute tak memory se
 CACHE_MAX = 300
-QUEUE_WAIT_S = 100.0
+QUEUE_WAIT_S = 200.0   # CPU queue lambi hoti hai: 200 s tak intezar (ETA step dikhta hai), phir saaf busy
 OWNER_MAX = 2   # ek user ek waqt mein itne bhaari sawal (baqi users ko jagah milti rahe)
 LEARN_MIN_VOTERS = 3  # itne alag log 👍 den tab hi jawab "seekha hua" mana jata hai (ek akela bigaar na sake)
 
