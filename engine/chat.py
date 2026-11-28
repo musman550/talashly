@@ -300,7 +300,7 @@ SYSTEM_PROMPT = (
 
 
 # Har jawab kahan se aaya: model (apna open-source LLM), index (apna crawl), rule (fixed code/builder), learned (users ke 👍)
-ORIGIN = {"llm": "model", "llm-direct": "model", "extractive": "index", "builder": "rule", "chat": "rule", "clarify": "rule",
+ORIGIN = {"llm": "model", "llm-direct": "model", "extractive": "index", "builder": "rule", "busy": "rule", "chat": "rule", "clarify": "rule",
           "refuse": "rule", "skill": "rule", "learned": "learned", "needllm": "rule", "agent": "model", "error": "rule", "none": "index"}
 
 
@@ -717,7 +717,7 @@ class Chat:
             yield "token", build_site(f"{base or 'website'} {text}")
             yield "done", {"mode": "builder"}
             return
-        if model.deep and not (ready and (site or intent(text) == "task")):
+        if model.deep and not (ready and (site or intent(text) == "task" or len(text) >= 90)):
             return  # Deep: sawal ho to research + sources; "email likho / poem / code" jaisa kaam ho aur LLM zinda ho to seedha LLM (research bekaar aur sust)
         if not ready:
             for fn in (lambda: poem(text), lambda: compare(text, self.searcher)):
@@ -738,7 +738,7 @@ class Chat:
                 yield "done", {"mode": "needllm"}
             return
         quick = short_fact(text) and not wants_sources(text, model) and not model.deep
-        longq = len(text) >= 90   # lamba/mushkil sawal: index ke tukde jawab nahi dete, LLM likhe
+        longq = len(text) >= 90 and (not model.deep or weak)   # deep: index kamzor ho tabhi; baqi: lamba/mushkil sawal: index ke tukde jawab nahi dete, LLM likhe
         if not (site or intent(text) == "task" or weak or quick or longq):
             return
         msgs = [{"role": "system", "content": SYSTEM_PROMPT.replace(" /no_think", "") + hints.extra(text) + " /no_think"}]
@@ -768,6 +768,10 @@ class Chat:
         if site:  # LLM gira: builder se phir bhi kaam ho jaye
             yield "token", build_site(text)
             yield "done", {"mode": "builder"}
+            return
+        if not got and longq and not quick:   # lamba sawal, LLM masroof: "kuch mutaalliqa maloomat" jhoot hai, saaf batao
+            yield "token", tr("busy", text)
+            yield "done", {"mode": "busy"}
 
     async def complete(self, role: str, text: str, model_id: str | None, history_user: str | None) -> dict:
         """Stateless poora jawab (OpenAI-compatible endpoint ke liye)."""

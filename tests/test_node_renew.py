@@ -22,8 +22,10 @@ def test_successor_swaps_only_the_slot_name():
     assert src2.replace("talashly-node-b", "talashly-node-a", 1) == text or src2.count('NAME = "') == 1
     m = json.loads(meta)
     assert m["id"] == "u/talashly-node-b" and m["enable_gpu"] == "false" and m["code_file"] == "node.py"
-    a2, _, o2 = mod.render_successor(src2, "talashly-node-b", "u")
-    assert o2 == "talashly-node-a" and 'NAME = "talashly-node-a"' in a2
+    c2, _, o2 = mod.render_successor(src2, "talashly-node-b", "u")
+    assert o2 == "talashly-node-c" and 'NAME = "talashly-node-c"' in c2
+    a2, _, o3 = mod.render_successor(c2, "talashly-node-c", "u")     # ring: a -> b -> c -> a
+    assert o3 == "talashly-node-a" and 'NAME = "talashly-node-a"' in a2
 
 
 def test_gpu_node_never_renews_and_missing_credentials_disable_renewal():

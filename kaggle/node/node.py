@@ -18,7 +18,7 @@ HOURS = float("__HOURS__")
 NAME = "__SLUG__"
 KUSER = "__KUSER__"                  # khud-tajdeed ke liye (node ~10.5 h baad khatam; naya node GitHub cron ke baghair khud chalao)
 KKEY = "__KKEY__"
-OTHER = {"talashly-node-a": "talashly-node-b", "talashly-node-b": "talashly-node-a"}   # GPU node tajdeed nahi karta (quota)
+OTHER = {"talashly-node-a": "talashly-node-b", "talashly-node-b": "talashly-node-c", "talashly-node-c": "talashly-node-a"}   # GPU node tajdeed nahi karta (quota)
 W = "/tmp/talashly"   # /kaggle/working nahi: wahan ki files Output ban kar 1-10 GB download hoti hain (status/log dekhna sust)
 T0 = time.time()
 HF = "https://huggingface.co/unsloth"
@@ -156,7 +156,7 @@ def bring_up():
             except Exception as e:  # noqa: BLE001
                 log("ye GPU model nahi chala, agla:", str(e)[:300])
         log("GPU raasta fail, CPU par girte hain")
-    if NAME.endswith("-b"):   # "quality lane": bada Qwen3-4B (30 GB RAM mein aaram se) mushkil/Roman-Urdu/code kaam ke liye
+    if NAME.endswith(("-b", "-c")):   # "quality lane" (b aur c): do 4B nodes = mushkil kaam ki speed doguni;: bada Qwen3-4B (30 GB RAM mein aaram se) mushkil/Roman-Urdu/code kaam ke liye
         try:
             log("quality lane: Qwen3-4B")
             SLOTS = 2   # bada model: kam slot, har ek ko zyada CPU

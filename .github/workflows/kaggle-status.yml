@@ -23,7 +23,7 @@ jobs:
           if [[ "$KAGGLE_KEY" == KGAT_* ]]; then printf '%s' "$KAGGLE_KEY" > ~/.kaggle/access_token; export KAGGLE_API_TOKEN="$KAGGLE_KEY"
           else printf '{"username":"%s","key":"%s"}' "$KAGGLE_USERNAME" "$KAGGLE_KEY" > ~/.kaggle/kaggle.json; fi
           chmod 600 ~/.kaggle/* || true
-          for slug in talashly-node-a talashly-node-b talashly-gpu; do
+          for slug in talashly-node-a talashly-node-b talashly-node-c talashly-gpu; do
             echo "=================== $slug"
             kaggle kernels status "$KAGGLE_USERNAME/$slug" 2>&1 | tail -2
             rm -rf "out_$slug"; mkdir "out_$slug"

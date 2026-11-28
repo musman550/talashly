@@ -98,3 +98,19 @@ def test_hints_same_language_note_and_load_cap(tmp_path):
         ch.waiting = 50
         assert ch._load_cap(700) == 300
         ch.waiting = 0
+
+
+def test_long_question_with_busy_llm_gets_honest_busy_not_fake_nosent(tmp_path, monkeypatch):
+    from tests.test_agent import _cfg_llm
+    from engine import chat as chat_mod
+
+    async def boom(*a, **k):
+        raise RuntimeError("all nodes busy")
+        yield ""
+    monkeypatch.setattr(chat_mod, "stream_chat", boom)
+    cfg, app = build(tmp_path)
+    _cfg_llm(cfg)
+    with TestClient(app) as c:
+        evs = chat(c, "Explique en détail comment fonctionne le chiffrement à clé publique, avec un exemple concret et deux erreurs courantes.")[1]
+    d = ev(evs, "done")[0]
+    assert d["mode"] == "busy" and "related information" not in "".join(ev(evs, "token"))

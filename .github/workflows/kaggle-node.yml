@@ -47,8 +47,8 @@ jobs:
           fi
           alive=$(echo "$st" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("cpu_alive",d["nodes_alive"]))')
           age=$(echo "$st" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("cpu_oldest_age_s",d["oldest_age_s"]))')
-          # do CPU nodes (1.7B fast + 4B quality) hamesha zinda rakho
-          if [ "${{ github.event.inputs.force }}" = "true" ] || [ "$alive" -lt 2 ] || [ "$age" -gt 37800 ]; then echo "start=true" >> "$GITHUB_OUTPUT"; else echo "start=false" >> "$GITHUB_OUTPUT"; fi
+          # teen CPU nodes (a: 1.7B fast, b+c: 4B quality) hamesha zinda rakho
+          if [ "${{ github.event.inputs.force }}" = "true" ] || [ "$alive" -lt 3 ] || [ "$age" -gt 37800 ]; then echo "start=true" >> "$GITHUB_OUTPUT"; else echo "start=false" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/checkout@v4
         if: steps.need.outputs.start == 'true'
       - uses: actions/setup-python@v5
@@ -79,7 +79,7 @@ jobs:
             [ "$code" = "200" ] && model="$rel"
           fi
           pick=""; running=0
-          for slug in talashly-node-a talashly-node-b; do
+          for slug in talashly-node-a talashly-node-b talashly-node-c; do
             s=$(kaggle kernels status "$KAGGLE_USERNAME/$slug" 2>&1 || true)
             echo "$slug: $s"
             if echo "$s" | grep -qiE "running|queued"; then running=$((running+1)); continue; fi
