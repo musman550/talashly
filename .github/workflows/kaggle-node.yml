@@ -47,7 +47,8 @@ jobs:
           fi
           alive=$(echo "$st" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("cpu_alive",d["nodes_alive"]))')
           age=$(echo "$st" | python3 -c 'import sys,json;d=json.load(sys.stdin);print(d.get("cpu_oldest_age_s",d["oldest_age_s"]))')
-          if [ "${{ github.event.inputs.force }}" = "true" ] || [ "$alive" -lt 2 ] || [ "$age" -gt 37800 ]; then   # do CPU nodes (1.7B fast + 4B quality) hamesha zinda rakho echo "start=true" >> "$GITHUB_OUTPUT"; else echo "start=false" >> "$GITHUB_OUTPUT"; fi
+          # do CPU nodes (1.7B fast + 4B quality) hamesha zinda rakho
+          if [ "${{ github.event.inputs.force }}" = "true" ] || [ "$alive" -lt 2 ] || [ "$age" -gt 37800 ]; then echo "start=true" >> "$GITHUB_OUTPUT"; else echo "start=false" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/checkout@v4
         if: steps.need.outputs.start == 'true'
       - uses: actions/setup-python@v5
